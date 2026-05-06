@@ -54,22 +54,31 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-def next_stage():
-    st.session_state.stage_idx += 1
-    st.session_state.trial_status = "READY"
+# --- 状态初始化 (放在脚本靠前的位置) ---
+# 检查每一个需要的变量，如果不存在就创建它
+if 'stage_idx' not in st.session_state:
+    st.session_state.stage_idx = 0
+if 'results' not in st.session_state:
+    st.session_state.results = {}
+if 'cdt_data' not in st.session_state:
+    st.session_state.cdt_data = []
+if 'cdt_trial' not in st.session_state:
     st.session_state.cdt_trial = 1
+if 'correct_count' not in st.session_state:
     st.session_state.correct_count = 0
-    st.rerun()
+if 'trial_status' not in st.session_state:
+    st.session_state.trial_status = "READY"
 
-# 阶段序列
-STAGES = [
-    "WELCOME", "INFO", "RRS", "BDI", "STAI", "T1_VAS_BSRI", 
-    "PRACTICE_INTRO", "CDT_PRACTICE", 
-    "VIDEO_INDUCTION", "WRITING", "RUMINATION", "T2_VAS_BSRI", 
-    "FORMAL_INTRO", "CDT_FORMAL", 
-    "RECOVERY", "FINISH"
-]
-current_stage = STAGES[st.session_state.stage_idx]
+# 确保 STAGES 列表已经定义
+STAGES = ["WELCOME", "INFO", "RRS", "BDI", "STAI", "T1_VAS_BSRI", "PRACTICE_INTRO", "CDT_PRACTICE", "VIDEO_INDUCTION", "WRITING", "RUMINATION", "T2_VAS_BSRI", "FORMAL_INTRO", "CDT_FORMAL", "RECOVERY", "FINISH"]
+
+# 只有在上面初始化完之后，再执行下面这一行 (第 72 行)
+try:
+    current_stage = STAGES[st.session_state.stage_idx]
+except AttributeError:
+    # 如果万一还是报错，强制重置一下并刷新
+    st.session_state.stage_idx = 0
+    st.rerun()
 
 # --- 2. 任务辅助逻辑 ---
 def countdown(seconds, msg):
