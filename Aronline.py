@@ -27,6 +27,11 @@ def show_noise_mask(placeholder):
     """显示噪音掩码图"""
     placeholder.image(get_noise_img(), use_container_width=True)
 
+def get_noise_img():
+    """生成随机噪音图用于掩码"""
+    # 确保已经 import numpy as np
+    return np.random.randint(0, 255, (400, 600), dtype=np.uint8)
+
 # --- 1. 基础网页样式配置 (浅色护眼模式) ---
 st.set_page_config(page_title="工作记忆实验", layout="centered")
 
