@@ -15,16 +15,19 @@ from streamlit_gsheets import GSheetsConnection
 # ==========================================
 
 @st.cache_data
-def get_static_mask():
-    """预生成一张掩码图并缓存，避免重复计算"""
-    return np.random.randint(0, 255, (400, 600), dtype=np.uint8)
+def get_image_list(folder):
+    """预读取图片路径，减少磁盘IO卡顿"""
+    if not os.path.exists(folder):
+        # 如果找不到文件夹，尝试在当前目录下找
+        return []
+    # 获取该文件夹下所有图片格式的文件
+    files = [os.path.join(folder, f) for f in os.listdir(folder) if f.lower().endswith(('.bmp', '.jpg', '.png'))]
+    return files
 
 @st.cache_data
-def get_all_image_paths(folder):
-    """预读取所有图片路径并缓存"""
-    if not os.path.exists(folder): return []
-    return [os.path.join(folder, f) for f in os.listdir(folder) if f.lower().endswith(('.bmp', '.jpg', '.png'))]
-
+def get_static_mask():
+    """预生成噪音掩码，避免跳转时重复计算导致卡顿"""
+    return np.random.randint(0, 255, (400, 600), dtype=np.uint8)
 
 
 # --- 声音生成函数 (无需外部文件) ---
