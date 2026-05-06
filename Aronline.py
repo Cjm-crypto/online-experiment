@@ -143,15 +143,24 @@ st.markdown("""<style>
 # 3. 浏览器端精准计时组件 (JS 核心)
 # ==========================================
 
-def run_js_sequence(sel_b64_list, mask_b64):
-    img_html = "".join([f'<img src="data:image/png;base64,{b64}" style="width:280px; margin:5px; border:2px solid white;">' for b64 in sel_b64_list])
+ddef run_js_sequence(sel_b64_list, mask_b64):
+    # 图片大小略微缩小，确保并排稳定性
+    img_html = "".join([f'<img src="data:image/png;base64,{b64}" style="width:250px; height:180px; margin:10px; border:3px solid white; object-fit:cover;">' for b64 in sel_b64_list])
     
     js_component = f"""
-    <div id="box" style="background:black; width:100%; height:500px; display:flex; justify-content:center; align-items:center;">
-        <div id="fix" style="color:red; font-size:120px; display:none;">+</div>
-        <div id="grid" style="display:none; width:600px; flex-wrap:wrap; justify-content:center;">{img_html}</div>
-        <img id="mask" src="data:image/png;base64,{mask_b64}" style="display:none; width:100%; height:100%; object-fit:cover;">
+    <div id="box" style="background:black; width:700px; height:500px; display:flex; justify-content:center; align-items:center; border-radius:10px; position:relative; overflow:hidden; margin:auto;">
+        <!-- 1. 注视点 -->
+        <div id="fix" style="color:red; font-size:120px; display:none; position:absolute; z-index:10;">+</div>
+        
+        <!-- 2. 四张记忆图 -->
+        <div id="grid" style="display:none; width:600px; flex-wrap:wrap; justify-content:center; position:absolute; z-index:10;">
+            {img_html}
+        </div>
+        
+        <!-- 3. 掩码图 (核心修改：全屏铺满) -->
+        <img id="mask" src="data:image/png;base64,{mask_b64}" style="display:none; width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; z-index:5;">
     </div>
+
     <script>
         const wait = (ms) => new Promise(res => setTimeout(res, ms));
         async function run() {{
@@ -159,18 +168,22 @@ def run_js_sequence(sel_b64_list, mask_b64):
             const g = document.getElementById('grid');
             const m = document.getElementById('mask');
             
+            // 1. 注视点 1s
             f.style.display = 'block'; await wait(1000); f.style.display = 'none';
+            
+            // 2. 记忆项 1s
             g.style.display = 'flex'; await wait(1000); g.style.display = 'none';
+            
+            // 3. 掩码 2.2s (此时会完全盖住黑色背景)
             m.style.display = 'block'; await wait(2200); m.style.display = 'none';
             
-            // 结束后告知 Streamlit
             window.parent.postMessage({{type: 'streamlit:setComponentValue', value: 'DONE'}}, '*');
         }}
         window.onload = run;
     </script>
     """
     return components.html(js_component, height=520)
-
+    
 # 4. 局部刷新组件 (CDT 任务核心)
 # ==========================================
 
@@ -238,33 +251,60 @@ def cdt_task_fragment(mode="practice"):
             st.rerun()
 
     elif st.session_state.cdt_step == "FEEDBACK":
-        if st.session_state.is_correct: 
+        # 1. 显示反馈 (静态 HTML 以防高度抖动闪烁)
+        if st.session_state.is_correct:
             st.session_state.practice_correct += 1
-            placeholder.success("✔ 正确")
-        else: placeholder.error("✘ 错误")
+            feedback_html = '<div style="height:60px; line-height:60px; text-align:center; background-color:#d4edda; color:#155724; border-radius:10px; font-weight:bold; font-size:24px; margin-top:20px;">✔ 正 确</div>'
+        else:
+            feedback_html = '<div style="height:60px; line-height:60px; text-align:center; background-color:#f8d7da; color:#721c24; border-radius:10px; font-weight:bold; font-size:24px; margin-top:20px;">✘ 错 误</div>'
+        
+        placeholder.markdown(feedback_html, unsafe_allow_html=True)
         time.sleep(0.6)
         
+        # 2. 判断当前试次是否结束
         if st.session_state.trial_num < total_trials:
+            # 未结束，自动进入下一组
             st.session_state.trial_num += 1
             st.session_state.cdt_step = "AUTO_SEQ"
             st.rerun()
         else:
-            # 结算逻辑
+            # 10组/60组全部结束，关闭运行状态
+            st.session_state.is_running = False
+            
+            # --- 练习阶段结算 ---
             if not is_formal:
                 acc = st.session_state.practice_correct / total_trials
-                if acc >= 0.6: 
-                    st.session_state.stage_idx += 1 # 自动进入视频阶段
+                if acc >= 0.6:
+                    # 达标：重置练习计数，直接自动跳转下一阶段 (VIDEO_INDUCTION)
+                    st.session_state.stage_idx += 1
+                    st.session_state.trial_num = 1
+                    st.session_state.practice_correct = 0
+                    st.session_state.cdt_step = "READY"
                     st.rerun()
                 else:
-                    st.error(f"不达标 ({acc*100:.0f}%)"); 
-                    if st.button("重试"): 
-                        st.session_state.trial_num=1; st.session_state.practice_correct=0; st.session_state.cdt_step="READY"; st.rerun()
+                    # 未达标：强制停留在当前页面，展示错误信息并提供“重新开始”按钮
+                    with placeholder.container():
+                        st.error(f"练习未达标！当前正确率仅为 {acc*100:.0f}%，未达到 60% 要求。")
+                        if st.button("重新开始练习", use_container_width=True):
+                            # 重置所有练习相关的控制变量
+                            st.session_state.trial_num = 1
+                            st.session_state.practice_correct = 0
+                            st.session_state.cdt_step = "READY"
+                            st.rerun()
+            
+            # --- 正式阶段结算 ---
             else:
+                # 判断 Block 切换 (第一组完进入第二组)
                 if st.session_state.block_idx == 0:
-                    st.session_state.block_idx = 1; st.session_state.trial_num = 1; 
-                    st.session_state.cdt_step = "READY"; st.rerun()
-                else: 
-                    st.session_state.stage_idx += 1; st.rerun()
+                    st.session_state.block_idx = 1
+                    st.session_state.trial_num = 1
+                    st.session_state.cdt_step = "READY"
+                    st.session_state.in_boost_phase = True  # 触发加强回想 (boost) 阶段
+                    st.rerun()
+                else:
+                    # 两组全部做完，直接自动跳转至恢复阶段 (RECOVERY)
+                    st.session_state.stage_idx += 1
+                    st.rerun()
 
 # --- 5. 实验流程控制 ---
 current_stage = STAGES[st.session_state.stage_idx]
@@ -389,6 +429,7 @@ elif current_stage == "VIDEO_INDUCTION":
 elif current_stage == "WRITING":
     st.markdown("### 正如刚才视频中那种颠倒黑白、令人窒息的不公与气愤。")
     st.markdown("请在下方输入框写下你人生中经历过的，最让你感到**【被严重误解、不公平对待、极度挫败却又无能为力】**的一个事件。")
+    st.markdown("【倒计时结束后方可点击，若随便点击则倒计时又会从180秒开始】")
     txt = st.text_area("书写框：", height=300)
     timer_p = st.empty()
     for i in range(180, -1, -1):
