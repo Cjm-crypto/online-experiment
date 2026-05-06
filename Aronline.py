@@ -267,7 +267,7 @@ def cdt_task_fragment(mode="practice"):
                     st.session_state.stage_idx += 1; st.rerun()
 
 # --- 5. 实验流程控制 ---
-
+current_stage = STAGES[st.session_state.stage_idx]
 # 1. 欢迎页
 if current_stage == "WELCOME":
     st.markdown("# 欢迎参加本次心理学测试")
