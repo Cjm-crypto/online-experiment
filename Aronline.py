@@ -166,10 +166,6 @@ elif current_stage in ["CDT_TASK", "CDT_FORMAL"]:
     st.markdown("#### 请判断探测面孔是否出现过？")
     st.image("https://via.placeholder.com/150", width=250) # 探测图
 
-    except Exception as e:
-        st.error(f"图片读取失败，请确保 GitHub 上有 '{folder}' 文件夹。错误信息: {e}")
-        if st.button("点击跳过此任务"):
-            next_stage()
     
     start_time = time.time()
     c1, c2 = st.columns(2)
@@ -193,6 +189,10 @@ elif current_stage in ["CDT_TASK", "CDT_FORMAL"]:
             else: 
                 st.session_state.cdt_trial = 1
                 next_stage()
+    except Exception as e:
+        st.error(f"图片读取失败，请确保 GitHub 上有 '{folder}' 文件夹。错误信息: {e}")
+        if st.button("点击跳过此任务"):
+            next_stage()
 
 # 10. 诱发视频播放
 elif current_stage == "VIDEO_PLAY":
