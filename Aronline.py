@@ -124,75 +124,46 @@ elif current_stage == "CDT_PRE_INSTR":
     if st.button("进入测试"): next_stage()
 
 # 8 & 14. CDT 任务主体 (F/J 按钮版)
-elif current_stage in ["CDT_TASK", "CDT_FORMAL"]:
+elif current_stage in ["CDT_PRACTICE", "CDT_FORMAL"]:
     is_formal = (current_stage == "CDT_FORMAL")
-    total_trials = 10 if not is_formal else 20
-    
+    total_trials = 5 if not is_formal else 20
     st.markdown(f"### CDT 任务 ({st.session_state.cdt_trial} / {total_trials})")
     
-    # 模拟任务序列
-    placeholder = st.empty()
-    
-    # 1. 注视点
-    placeholder.markdown("<h1 style='color: red; font-size: 100px;'>+</h1>", unsafe_allow_html=True)
-    time.sleep(1.0)
-    
-    # 2. 记忆项 (4张图 2x2 布局)
-    placeholder.empty()
-    try:
-        folder = "neutral" # 默认读 neutral 文件夹
-        all_imgs = [f for f in os.listdir(folder) if f.lower().endswith(('.bmp', '.jpg', '.png'))]
-        # 随机选 4 张记忆，1 张探测
-        selected = random.sample(all_imgs, 4)
-        probe = random.choice(selected) if random.random() > 0.5 else random.choice(list(set(all_imgs)-set(selected)))
-        
-        # 显示 4 张
-        m_col1, m_col2 = placeholder.columns(2)
-        with m_col1:
-            st.image(os.path.join(folder, selected[0]), width=200)
-            st.image(os.path.join(folder, selected[1]), width=200)
-        with m_col2:
-            st.image(os.path.join(folder, selected[2]), width=200)
-            st.image(os.path.join(folder, selected[3]), width=200)
-        time.sleep(1.8)
-    
-    # 3. 掩码 (噪音干扰)
-    placeholder.empty()
-    placeholder.markdown("### [ 噪音掩码 ]")
-    time.sleep(0.6)
-    
-    # 4. 探测与判断 (核心修改：F/J 按钮)
-    placeholder.empty()
-    st.markdown("#### 请判断探测面孔是否出现过？")
-    st.image("https://via.placeholder.com/150", width=250) # 探测图
+    if st.button(f"点击开始第 {st.session_state.cdt_trial} 组测试", key=f"btn_{st.session_state.cdt_trial}"):
+        placeholder = st.empty()
+        # 1. 注视点
+        placeholder.markdown("<h1 style='color: red;'>+</h1>", unsafe_allow_html=True)
+        time.sleep(1.0)
+        # 2. 记忆项
+        placeholder.empty()
+        try:
+            folder = "neutral"
+            all_imgs = [f for f in os.listdir(folder) if f.lower().endswith(('.bmp', '.jpg', '.png'))]
+            sel = random.sample(all_imgs, 1) # 演示仅显示1张，防止加载慢
+            placeholder.image(os.path.join(folder, sel[0]), width=400)
+            time.sleep(1.8)
+            # 3. 掩码
+            placeholder.empty()
+            placeholder.markdown("### [ 噪音掩码 ]")
+            time.sleep(0.6)
+            placeholder.empty()
+            st.session_state.waiting_resp = True
+        except Exception as e:
+            st.error(f"图片文件夹错误: {e}")
 
-    
-    start_time = time.time()
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("F (一样 / 出现过)"):
-            rt = time.time() - start_time
-            st.session_state.cdt_results.append({"Trial": st.session_state.cdt_trial, "Resp": "F", "RT": rt})
-            if st.session_state.cdt_trial < total_trials: 
-                st.session_state.cdt_trial += 1
-                st.rerun()
-            else: 
-                st.session_state.cdt_trial = 1
-                next_stage()
-    with c2:
-        if st.button("J (全新 / 没出现)"):
-            rt = time.time() - start_time
-            st.session_state.cdt_results.append({"Trial": st.session_state.cdt_trial, "Resp": "J", "RT": rt})
-            if st.session_state.cdt_trial < total_trials: 
-                st.session_state.cdt_trial += 1
-                st.rerun()
-            else: 
-                st.session_state.cdt_trial = 1
-                next_stage()
-    except Exception as e:
-        st.error(f"图片读取失败，请确保 GitHub 上有 '{folder}' 文件夹。错误信息: {e}")
-        if st.button("点击跳过此任务"):
-            next_stage()
+    if st.session_state.get('waiting_resp'):
+        st.markdown("#### 判断探测面孔是否出现过？")
+        c1, c2 = st.columns(2)
+        if c1.button("F (出现过)"):
+            st.session_state.cdt_results.append({"Stage": current_stage, "Resp": "F"})
+            st.session_state.waiting_resp = False
+            if st.session_state.cdt_trial < total_trials: st.session_state.cdt_trial += 1; st.rerun()
+            else: st.session_state.cdt_trial = 1; next_stage()
+        if c2.button("J (没出现)"):
+            st.session_state.cdt_results.append({"Stage": current_stage, "Resp": "J"})
+            st.session_state.waiting_resp = False
+            if st.session_state.cdt_trial < total_trials: st.session_state.cdt_trial += 1; st.rerun()
+            else: st.session_state.cdt_trial = 1; next_stage()
 
 # 10. 诱发视频播放
 elif current_stage == "VIDEO_PLAY":
