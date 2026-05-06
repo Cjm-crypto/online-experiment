@@ -16,7 +16,7 @@ st.markdown("""
     .main { background-color: #000000; color: black; }
     .stMarkdown { text-align: center; font-family: 'Microsoft YaHei'; }
     h1, h2, h3, h4 { color: #FFFFFF !important; }
-    div.stButton > button { width: 100%; height: 4em; font-size: 18px; background-color: #333333; color: white; border: 1px solid #555; }
+    div.stButton > button { width: 100%; height: 4em; font-size: 18px; background-color: #333333; color:black; border: 1px solid #555; }
     div.stButton > button:hover { border-color: #FF4B4B; color: #FF4B4B; }
     .stRadio > label { font-size: 18px !important; color: #EEEEEE !important; }
     </style>
