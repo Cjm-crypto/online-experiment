@@ -234,7 +234,7 @@ elif current_stage == "PRACTICE_INTRO":
 # 9. CDT 练习逻辑 (10组，60%要求)
 elif current_stage == "CDT_PRACTICE":
     TOTAL_PRACTICE = 10
-    st.markdown(f"### 练习阶段 ({st.session_state.cdt_trial}/{total_practice})")
+    st.markdown(f"### 练习阶段 ({st.session_state.cdt_trial}/{TOTAL_PRACTICE})")
     placeholder = st.empty()
 
     # 状态 A：准备开始
