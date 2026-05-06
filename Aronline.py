@@ -324,7 +324,7 @@ if 'block_idx' not in st.session_state:
 if 'in_boost_phase' not in st.session_state:
     st.session_state.in_boost_phase = False
 
-if current_stage == "FORMAL_INTRO":
+elif current_stage == "FORMAL_INTRO":
     st.markdown("## 下面进行【正式实验任务】")
     st.markdown(f"""
     接下来将进行 **【两组实验任务】**。
@@ -337,10 +337,14 @@ if current_stage == "FORMAL_INTRO":
     准备好后，点击下方按钮开始第一组任务。
     """)
     if st.button("开始正式任务"): 
-    # 平衡逻辑
-    b_list = [("中性", "neutral"), ("负性", "negative")]
-    if len(st.session_state.results.get('Name','')) % 2 == 0: b_list.reverse()
-    st.session_state.blocks_order = b_list; next_stage()
+        b_list = [("中性", "neutral"), ("负性", "negative")]
+        user_name = st.session_state.results.get('Name', '')
+        if len(user_name) % 2 == 0:
+            b_list.reverse()
+            
+        # 将顺序存入内存并进入下一阶段
+        st.session_state.blocks_order = b_list
+        next_stage()  # 这一行也要缩进，表示点击按钮后才执行跳转
     
  # 核心修改：正式 CDT 逻辑 (记录 RT 和信心)
 elif current_stage == "CDT_FORMAL":
