@@ -215,7 +215,7 @@ elif current_stage == "T1_BSRI_INDEPENDENT":
 # 8. CDT 练习任务指导语 
 elif current_stage == "PRACTICE_INTRO":
     st.markdown("## 下面进入【练习阶段】")
-    st.markdown("""
+    cdt_intro = """
     接下来的练习旨在帮您熟悉任务流程：
     1. 屏幕中央会出现一个红色的“+”字，请盯住它。
     2. 随后，屏幕会闪现【4张面孔】，请努力记住它们的脸部特征。
@@ -228,49 +228,104 @@ elif current_stage == "PRACTICE_INTRO":
     - 如果不是（**全新/没出现过**），请点击屏幕上的 **【J】** 按钮。
 
     *正确率未达 60% 会持续练习。*
-    """)
+    """
+    st.markdown(cdt_intro)
     if st.button("准备好后，点击开始练习"): next_stage()
-# 9. CDT 练习逻辑 (5组，60%要求)
+# 9. CDT 练习逻辑 (10组，60%要求)
 elif current_stage == "CDT_PRACTICE":
     total = 10
-    st.markdown(f"### 练习阶段 ({st.session_state.cdt_trial}/{total})")
+    st.markdown(f"### 练习阶段 ({st.session_state.cdt_trial}/{total_practice})")
     placeholder = st.empty()
 
+    # 状态 A：准备开始
     if st.session_state.trial_status == "READY":
-        if st.button(f"开始第 {st.session_state.cdt_trial} 组测试"):
-            with placeholder.container():
-                st.markdown("<h1 style='color:red; text-align:center;'>+</h1>", unsafe_allow_html=True); time.sleep(1.0)
-                st.write("### 记忆 4 张面孔中..."); time.sleep(1.0)
-                st.write("### [ 噪音掩码 ]"); time.sleep(2.2)
-                st.session_state.ans_correct = random.choice([True, False])
-                st.session_state.start_time = time.time()
-                st.session_state.trial_status = "WAITING"; st.rerun()
+        with placeholder.container():
+            st.write("请准备好，点击按钮开始本组序列。")
+            if st.button(f"开始第 {st.session_state.cdt_trial} 组测试"):
+                st.session_state.trial_status = "SEQUENCE"
+                st.rerun()
 
-    elif st.session_state.trial_status == "WAITING":
-        st.write("#### 判断：这张脸刚才出现过吗？")
-        c1, c2 = st.columns(2)
-        resp = None
-        if c1.button("F (出现过)"): resp = True
-        if c2.button("J (没出现)"): resp = False
+    # 状态 B：自动化序列呈现 (这是核心修改点)
+    elif st.session_state.trial_status == "SEQUENCE":
+        # 1. 呈现红色的 + 号 (1.0秒)
+        placeholder.markdown("<h1 style='color:red; text-align:center; font-size:100px; margin-top:100px;'>+</h1>", unsafe_allow_html=True)
+        time.sleep(1.0)
         
-        if resp is not None:
-            is_correct = (resp == st.session_state.ans_correct)
-            if is_correct: st.session_state.correct_count += 1
-            # 显示反馈 (独立页面效果)
-            placeholder.success("正确！") if is_correct else placeholder.error("错误！")
+        # 2. 呈现 4 张图片 (1.0秒)
+        placeholder.empty() # 清空 + 号
+        with placeholder.container():
+            st.markdown("<h2 style='text-align:center;'>[ 4张记忆面孔呈现中... ]</h2>", unsafe_allow_html=True)
+            # 这里可以放 st.image(...)
             time.sleep(1.0)
+        
+        # 3. 呈现 掩码 (2.2秒)
+        placeholder.empty() # 清空图片
+        placeholder.markdown("<h1 style='text-align:center; margin-top:100px;'>[ 噪音掩码 ]</h1>", unsafe_allow_html=True)
+        time.sleep(2.2)
+        
+        # 自动跳转到判断阶段
+        st.session_state.ans_is_correct = random.choice([True, False]) # 模拟答案逻辑
+        st.session_state.trial_status = "WAITING"
+        st.rerun()
+
+    # 状态 C：判断阶段
+    elif st.session_state.trial_status == "WAITING":
+        with placeholder.container():
+            st.markdown("#### 判断：这张脸刚才出现过吗？")
+            col1, col2 = st.columns(2)
+            resp = None
+            if col1.button("F (出现过)"): resp = True
+            if col2.button("J (没出现)"): resp = False
             
-            if st.session_state.cdt_trial < total:
-                st.session_state.cdt_trial += 1; st.session_state.trial_status = "READY"; st.rerun()
-            else:
-                acc = st.session_state.correct_count / total
-                st.write(f"练习结束，正确率: {acc*100:.0f}%")
-                if acc < 0.6:
-                    if st.button("未达 60%，点击重新练习"): 
-                        st.session_state.cdt_trial = 1; st.session_state.correct_count = 0
-                        st.session_state.trial_status = "READY"; st.rerun()
-                else:
-                    st.success("正确率达标！即将自动进入下一阶段..."); time.sleep(2); next_stage()
+            if resp is not None:
+                is_correct = (resp == st.session_state.ans_is_correct)
+                if is_correct:
+                    st.session_state.correct_count += 1
+                
+                # 记录是否正确并进入反馈状态
+                st.session_state.last_trial_result = is_correct
+                st.session_state.trial_status = "FEEDBACK"
+                st.rerun()
+
+    # 状态 D：正误反馈阶段 (单独一页呈现)
+    elif st.session_state.trial_status == "FEEDBACK":
+        placeholder.empty()
+        if st.session_state.last_trial_result:
+            placeholder.markdown("<h1 style='color:green; text-align:center; margin-top:100px;'>正确！</h1>", unsafe_allow_html=True)
+        else:
+            placeholder.markdown("<h1 style='color:red; text-align:center; margin-top:100px;'>错误！</h1>", unsafe_allow_html=True)
+        
+        time.sleep(1.0) # 反馈显示1秒
+        
+        # 判断是否继续练习
+        if st.session_state.cdt_trial < total_practice:
+            st.session_state.cdt_trial += 1
+            st.session_state.trial_status = "READY"
+            st.rerun()
+        else:
+            # 10组结束，计算正确率
+            accuracy = st.session_state.correct_count / total_practice
+            st.session_state.final_acc = accuracy
+            st.session_state.trial_status = "RESULT_CHECK"
+            st.rerun()
+
+    # 状态 E：正确率检查与跳转
+    elif st.session_state.trial_status == "RESULT_CHECK":
+        acc_pct = st.session_state.final_acc * 100
+        st.write(f"### 练习结束")
+        st.write(f"您的正确率为: **{acc_pct:.0f}%**")
+        
+        if st.session_state.final_acc < 0.6:
+            st.error("正确率未达到 60%，需要重新进行练习。")
+            if st.button("重新开始练习"):
+                st.session_state.cdt_trial = 1
+                st.session_state.correct_count = 0
+                st.session_state.trial_status = "READY"
+                st.rerun()
+        else:
+            st.success("恭喜！正确率达标。即将自动进入诱发阶段...")
+            time.sleep(2.0)
+            next_stage()
 
 # 10. 诱发视频播放
 elif current_stage == "VIDEO_INDUCTION":
