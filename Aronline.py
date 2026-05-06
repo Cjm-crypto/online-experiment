@@ -70,7 +70,7 @@ if 'trial_status' not in st.session_state:
     st.session_state.trial_status = "READY"
 
 # 确保 STAGES 列表已经定义
-STAGES = ["WELCOME", "INFO", "RRS", "BDI", "STAI", "T1_VAS_BSRI", "PRACTICE_INTRO", "CDT_PRACTICE", "VIDEO_INDUCTION", "WRITING", "RUMINATION", "T2_VAS_BSRI", "FORMAL_INTRO", "CDT_FORMAL", "RECOVERY", "FINISH"]
+STAGES = ["WELCOME", "INFO", "RRS", "BDI", "STAI", "T1_VAS_COMBINED", "T1_BSRI_INDEPENDENT", "PRACTICE_INTRO","CDT_PRACTICE", "WAITING", "VIDEO_INDUCTION", "WRITING", "RUMINATION", "T2_VAS_BSRI", "FORMAL_INTRO", "CDT_FORMAL","READY","PLAYING","WAITING", "RECOVERY", "FINISH"]
 
 try:
     current_stage = STAGES[st.session_state.stage_idx]
@@ -80,12 +80,12 @@ except:
 
 
 # --- 2. 任务辅助逻辑 ---
-def countdown(seconds, msg):
-    p = st.empty()
+def countdown_timer(seconds, message):
+    placeholder = st.empty()
     for i in range(seconds, -1, -1):
-        p.markdown(f"<h2 style='color:red;'>⏳ {msg}: {i} 秒</h2>", unsafe_allow_html=True)
+        placeholder.markdown(f"<h2 style='color: #FF4B4B;'>⏳ {message}: {i} 秒</h2>", unsafe_allow_html=True)
         time.sleep(1)
-    p.empty()
+    placeholder.empty()
 
 # --- 2. 实验常量与量表题库 ---
 RRS_ITEMS = ["我究竟做了什么要遭如此报应", "分析新近发生的事情试图找到原因", "想到“我为什么总是有这种反应”", "一个人走开，思考自己为什么会有这种感觉", "记录你自己的想法并做分析", "回想新近的情境，希望情形已经好转", "想到“为什么我有这样问题而别人没有。”", "想到“我为什么不能把事情做得更好一点﹖”", "分析自己的性格试图找到沮丧的原因", "独自去某个地方考虑自己的感受"]
@@ -96,18 +96,14 @@ BSRI_ITEMS = ["1. 此刻，我在反复思考自己的负面情绪。", "2. 此�
 # --- 3. 核心功能函数 ---
 def next_stage():
     st.session_state.stage_idx += 1
+    st.session_state.trial_status = "READY"
     st.rerun()
 
 def play_beep():
     if os.path.exists("beep.wav"):
         st.audio("beep.wav", autoplay=True)
 
-def countdown_timer(seconds, message):
-    placeholder = st.empty()
-    for i in range(seconds, -1, -1):
-        placeholder.markdown(f"<h2 style='color: #FF4B4B;'>⏳ {message}: {i} 秒</h2>", unsafe_allow_html=True)
-        time.sleep(1)
-    placeholder.empty()
+
 
 # --- 4. 实验流程控制 ---
 
