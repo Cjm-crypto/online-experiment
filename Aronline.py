@@ -3,8 +3,6 @@ import pandas as pd
 import time
 import os
 import random
-import streamlit as st
-import time
 from streamlit_gsheets import GSheetsConnection
 import numpy as np
 
@@ -63,35 +61,20 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- 2. 状态初始化 (在脚本最前端运行) ---
-if 'stage_idx' not in st.session_state:
-    st.session_state.stage_idx = 0
-if 'results' not in st.session_state:
-    st.session_state.results = {}
-if 'cdt_data' not in st.session_state:
-    st.session_state.cdt_data = [] 
-if 'cdt_trial' not in st.session_state:
-    st.session_state.cdt_trial = 1
-if 'correct_count' not in st.session_state:
-    st.session_state.correct_count = 0
-if 'trial_status' not in st.session_state:
-    st.session_state.trial_status = "READY"
-if 'block_idx' not in st.session_state:
-    st.session_state.block_idx = 0
-if 'in_boost_phase' not in st.session_state:
-    st.session_state.in_boost_phase = False
+if 'stage_idx' not in st.session_state: st.session_state.stage_idx = 0
+if 'results' not in st.session_state: st.session_state.results = {}
+if 'cdt_data' not in st.session_state: st.session_state.cdt_data = []
+if 'cdt_trial' not in st.session_state: st.session_state.cdt_trial = 1
+if 'correct_count' not in st.session_state: st.session_state.correct_count = 0
+if 'block_idx' not in st.session_state: st.session_state.block_idx = 0
+if 'in_boost_phase' not in st.session_state: st.session_state.in_boost_phase = False
 
-# 【核心修复：清理了混入状态变量的 BUG】
 STAGES = [
-    "WELCOME", "INFO", "RRS", "BDI", "STAI", "T1_VAS_COMBINED","T1_BSRI_INDEPENDENT", 
-    "PRACTICE_INTRO", "CDT_PRACTICE", "VIDEO_INDUCTION", "WRITING", "RUMINATION", 
-    "T2_VAS_BSRI", "FORMAL_INTRO", "CDT_FORMAL", "RECOVERY", "FINISH"
+    "WELCOME", "INFO", "RRS", "BDI", "STAI", "T1_VAS_COMBINED", "T1_BSRI",
+    "PRACTICE_INTRO", "CDT_PRACTICE", "VIDEO_INDUCTION", "WRITING", 
+    "RUMINATION", "T2_VAS_COMBINED", "T2_BSRI", "FORMAL_INTRO", 
+    "CDT_FORMAL", "RECOVERY", "FINISH"
 ]
-
-try:
-    current_stage = STAGES[st.session_state.stage_idx]
-except:
-    st.session_state.stage_idx = 0
-    st.rerun()
 
 # --- 3. 实验常量与量表题库 ---
 RRS_ITEMS = ["我究竟做了什么要遭如此报应", "分析新近发生的事情试图找到原因", "想到“我为什么总是有这种反应”", "一个人走开，思考自己为什么会有这种感觉", "记录你自己的想法并做分析", "回想新近的情境，希望情形已经好转", "想到“为什么我有这样问题而别人没有。”", "想到“我为什么不能把事情做得更好一点﹖”", "分析自己的性格试图找到沮丧的原因", "独自去某个地方考虑自己的感受"]
@@ -102,17 +85,11 @@ BSRI_ITEMS = ["1. 此刻，我在反复思考自己的负面情绪。", "2. 此�
 # --- 4. 任务辅助逻辑 ---
 def next_stage():
     st.session_state.stage_idx += 1
-    st.session_state.trial_status = "READY"
     st.session_state.cdt_trial = 1
     st.session_state.correct_count = 0
     st.rerun()
 
-def countdown_timer(seconds, message):
-    placeholder = st.empty()
-    for i in range(seconds, -1, -1):
-        placeholder.markdown(f"<h2 style='color: #FF4B4B;'>⏳ {message}: {i} 秒</h2>", unsafe_allow_html=True)
-        time.sleep(1)
-    placeholder.empty()
+current_stage = STAGES[st.session_state.stage_idx]
 
     
 # --- 5. 实验流程控制 ---
@@ -195,7 +172,7 @@ elif current_stage == "T1_VAS_COMBINED":
         next_stage()
 
 # 7. T1 BSRI 评估 (T1) ---
-elif current_stage == "T1_BSRI_INDEPENDENT":
+elif current_stage == "T1_BSRI":
     st.markdown("## 状态评估 (BSRI)")
     st.write("请根据此刻的真实感受，对以下描述进行打分（1=完全不符合，7=完全符合）：")
     bsri_res = [st.radio(q, [1, 2, 3, 4, 5, 6, 7], horizontal=True, key=f"t1_bsri_{i}") for i, q in enumerate(BSRI_ITEMS)]
@@ -225,44 +202,46 @@ elif current_stage == "PRACTICE_INTRO":
 # 9. CDT 练习逻辑 (10组，60%要求)
 elif current_stage == "CDT_PRACTICE":
     TOTAL_PRACTICE = 10
-    st.markdown(f"### 练习阶段 ({st.session_state.cdt_trial}/{TOTAL_PRACTICE})")
-    main_p = st.empty()
-
-    if st.session_state.trial_status == "READY":
-        if main_p.button(f"点击开始第 {st.session_state.cdt_trial} 组测试"):
-            st.session_state.trial_status = "SEQUENCE"; st.rerun()
-
-    elif st.session_state.trial_status == "SEQUENCE":
-        with main_p.container():
-            # 1. 注视点
+    trial_idx = st.session_state.cdt_trial
+    st.markdown(f"### 练习阶段 {trial_idx}/{TOTAL_PRACTICE}")
+    
+    placeholder = st.empty()
+    
+    # 自动流程逻辑
+    if 'practice_step' not in st.session_state: st.session_state.practice_step = "START"
+    
+    if st.session_state.practice_step == "START":
+        if placeholder.button(f"开始第 {trial_idx} 试次"):
+            st.session_state.practice_step = "RUNNING"
+            st.rerun()
+            
+    elif st.session_state.practice_step == "RUNNING":
+        with placeholder.container():
+            # 1. 注视点 (1s)
             st.markdown("<h1 style='color:red; text-align:center; font-size:100px; padding:100px 0;'>+</h1>", unsafe_allow_html=True)
             time.sleep(1.0)
-            st.empty() # 清空
-            
-            # 2. 图片呈现 (1s)
+            # 2. 记忆项 (1s)
+            st.empty()
             folder = "neutral"
-            try:
-                all_imgs = [f for f in os.listdir(folder) if f.lower().endswith(('.bmp', '.jpg', '.png'))]
-                sel = random.sample(all_imgs, 4)
-                st.session_state.ans_correct = random.choice([True, False])
-                prb = random.choice(sel) if st.session_state.ans_correct else random.choice(list(set(all_imgs)-set(sel)))
-                st.session_state.current_probe = os.path.join(folder, prb)
-                c1, c2 = st.columns(2)
-                c1.image(os.path.join(folder, sel[0]), use_container_width=True)
-                c1.image(os.path.join(folder, sel[1]), use_container_width=True)
-                c2.image(os.path.join(folder, sel[2]), use_container_width=True)
-                c2.image(os.path.join(folder, sel[3]), use_container_width=True)
-                time.sleep(1.0)
-            except: st.error("图片读取失败"); time.sleep(1)
-            
-            # 3. 掩码呈现 (2.2s)
+            all_imgs = [f for f in os.listdir(folder) if f.lower().endswith(('.bmp', '.jpg', '.png'))]
+            sel = random.sample(all_imgs, 4)
+            st.session_state.ans_correct = random.choice([True, False])
+            prb_img = random.choice(sel) if st.session_state.ans_correct else random.choice(list(set(all_imgs)-set(sel)))
+            st.session_state.current_probe = os.path.join(folder, prb_img)
+            c1, c2 = st.columns(2)
+            c1.image(os.path.join(folder, sel[0]), use_container_width=True)
+            c1.image(os.path.join(folder, sel[1]), use_container_width=True)
+            c2.image(os.path.join(folder, sel[2]), use_container_width=True)
+            c2.image(os.path.join(folder, sel[3]), use_container_width=True)
+            time.sleep(1.0) # 练习阶段设为1s
+            # 3. 掩码 (300ms) + 延迟 (2.2s + 0.6s)
             st.empty()
             st.image(get_noise_img(), use_container_width=True)
-            time.sleep(2.2)
-            
-            st.session_state.trial_status = "WAITING"; st.rerun()
+            time.sleep(3.1) 
+            st.session_state.practice_step = "JUDGE"
+            st.rerun()
 
-    elif st.session_state.trial_status == "WAITING":
+    elif st.session_state.practice_step == "JUDGE":
         st.markdown("#### 判断：刚才那张脸出现过吗？")
         st.image(st.session_state.current_probe, width=300)
         c1, c2 = st.columns(2)
@@ -270,25 +249,20 @@ elif current_stage == "CDT_PRACTICE":
         if c1.button("F (出现过)"): resp = True
         if c2.button("J (没出现)"): resp = False
         if resp is not None:
-            correct = (resp == st.session_state.ans_correct)
-            if correct: st.session_state.correct_count += 1
-            st.session_state.last_feedback = correct
-            st.session_state.trial_status = "FEEDBACK"; st.rerun()
-
-    elif st.session_state.trial_status == "FEEDBACK":
-        if st.session_state.last_feedback: st.success("### 正确！")
-        else: st.error("### 错误！")
-        time.sleep(1.0)
-        if st.session_state.cdt_trial < TOTAL_PRACTICE:
-            st.session_state.cdt_trial += 1; st.session_state.trial_status = "READY"; st.rerun()
-        else:
-            acc = st.session_state.correct_count / TOTAL_PRACTICE
-            st.write(f"练习完成。正确率：{acc*100:.0f}%")
-            if acc < 0.6:
-                if st.button("未达 60%，点击重新练习"): 
-                    st.session_state.cdt_trial = 1; st.session_state.correct_count = 0; st.session_state.trial_status = "READY"; st.rerun()
+            if resp == st.session_state.ans_correct: st.session_state.correct_count += 1
+            if trial_idx < TOTAL_PRACTICE:
+                st.session_state.cdt_trial += 1
+                st.session_state.practice_step = "RUNNING" # 自动进入下一题
+                st.rerun()
             else:
-                st.success("达标！进入下一阶段"); time.sleep(2); next_stage()
+                acc = st.session_state.correct_count / TOTAL_PRACTICE
+                st.write(f"练习完成，正确率：{acc*100:.0f}%")
+                if acc < 0.6:
+                    if st.button("未达标，重新练习"):
+                        st.session_state.cdt_trial = 1; st.session_state.correct_count = 0
+                        st.session_state.practice_step = "START"; st.rerun()
+                else:
+                    st.success("达标！"); time.sleep(1); next_stage()
 # 10. 诱发视频播放
 elif current_stage == "VIDEO_INDUCTION":
     st.markdown("### 接下来，您将观看一段电影片段。")
@@ -317,29 +291,55 @@ elif current_stage == "RUMINATION":
         "想一想，这件事对你现在的状态，究竟造成了多大无法挽回的负面影响？"
     ]
     if 'rum_idx' not in st.session_state: st.session_state.rum_idx = 0
-    st.markdown(f"### {prompts[st.session_state.rum_idx]}")
+    
+    # 修改点：显示之前的书写内容，且设为不可编辑 (disabled)
+    st.text_area("你刚才记录的事件：", value=st.session_state.results.get("Writing",""), height=200, disabled=True)
+    
+    idx = st.session_state.rum_idx
+    st.markdown(f"### 【请闭眼深度思考】\n{prompts[idx]}")
+    
     timer_p = st.empty()
     for i in range(45, -1, -1):
-        timer_p.markdown(f"## ⏳ 思考倒计时: {i} 秒"); time.sleep(1)
-    play_beep()
-    if st.session_state.rum_idx < len(prompts)-1:
-        st.session_state.rum_idx += 1; st.rerun()
-    else: next_stage()
-
-# 13. T2 评估
-elif current_stage == "T2_VAS_BSRI":
-    st.header("状态评估")
-    t2_aro = st.slider("请评估你此刻的【生理与心理唤醒度】", 0, 100, 50)
-    t2_val = st.slider("请评估你此刻的【情绪效价】", 0, 100, 50)
-    if st.button("提交评估"):
-        st.session_state.results.update({"T2_Arousal": t2_aro, "T2_Valence": t2_val})
+        timer_p.markdown(f"## ⏳ 思考倒计时: {i} 秒")
+        time.sleep(1)
+    
+    play_beep() # 修改点：倒计时结束响铃
+    
+    if idx < len(prompts) - 1:
+        st.session_state.rum_idx += 1
+        st.rerun()
+    else:
         next_stage()
 
+# 13--- 后测评估 (修改点4：加入 BSRI) ---
+elif current_stage == "T2_VAS_COMBINED":
+    st.markdown("## 状态评估 (T2)")
+    st.markdown("### 1. 请评估你此刻的【生理与心理唤醒度】")
+    st.write("(如：心跳加速、警觉、紧张感)")
+    st.info("【打分参考】\n\n0 - 30：感到平静、放松、没有波澜\n\n40 - 60：中等程度的激活，感到轻微的紧张或气愤\n\n70 - 100：非常强烈的紧张、气愤或激动")
+    t1_aro = st.select_slider("滑动滑块评估唤醒度", options=list(range(101)), value=50, key="t2_aro_val")
+    
+    st.markdown("---")
+    st.markdown("### 2. 请评估你此刻的【情绪效价】")
+    st.info("【打分参考】\n\n0 - 30：感到偏向负面、郁郁、痛苦\n\n40 - 60：情绪中立，没有明显的好坏\n\n70 - 100：感到偏向正面、开心、愉悦")
+    t1_val = st.select_slider("滑动滑块评估效价", options=list(range(101)), value=50, key="t2_val_val")
+    
+    if st.button("确认提交以上评估"):
+        st.session_state.results["T2_Arousal"] = t2_aro
+        st.session_state.results["T2_Valence"] = t2_val
+        next_stage()
+
+
+elif current_stage == "T2_BSRI":
+    st.markdown("## 状态评估 (BSRI - T2)")
+    st.write("请根据此刻的真实感受，对以下描述进行打分（1=完全不符合，7=完全符合）：")
+    res = [st.radio(q, [1,2,3,4,5,6,7], horizontal=True, key=f"t2_bsri_{i}") for i, q in enumerate(BSRI_ITEMS)]
+    if st.button("提交 T2 BSRI"):
+        st.session_state.results["T2_BSRI_Sum"] = sum(res)
+        next_stage()
+
+
 # 14. 正式阶段 CDT 指导语 (全面还原)
-if 'block_idx' not in st.session_state:
-    st.session_state.block_idx = 0  # 0代表第一组，1代表第二组
-if 'in_boost_phase' not in st.session_state:
-    st.session_state.in_boost_phase = False
 
 elif current_stage == "FORMAL_INTRO":
     st.markdown("## 下面进行【正式实验任务】")
@@ -420,27 +420,32 @@ elif current_stage == "RECOVERY":
 
 # 17. 在实验结束阶段 (FINISH)
 elif current_stage == "FINISH":
-    st.title("实验完成！感谢参与。")
-    conn = st.connection("gsheets", type=GSheetsConnection)
+    st.balloons()
+    st.header("实验已全部完成！")
     
-    # 构建每一行数据 (每个 Trial 一行，匹配你提供的 Python 逻辑)
-    rows = []
-    base = st.session_state.results
-    for d in st.session_state.cdt_data:
-        row = {
-            "ID": base.get("Name"), "Gender": base.get("Sex"), "Age": base.get("Age"),
-            "RRS_Sum": base.get("RRS_Sum"), "BDI_Sum": base.get("BDI_Sum"), "STAI_Sum": base.get("STAI_Sum"),
-            "T1_Aro": base.get("T1_Aro"), "T1_Valence": base.get("T1_Val"), "T2_Aro": base.get("T2_Aro"),
-            "Block": d["Block"], "Trial": d["Trial"], "Is_Same": d["Is_Same"], 
-            "Resp": d["Resp"], "Correct": d["Correct"], "RT": d["RT"], "Conf": d["Conf"]
-        }
-        rows.append(row)
+    # 构建最终数据表
+    final_rows = []
+    base_info = st.session_state.results_summary
+    for d in st.session_state.cdt_raw_data:
+        row = {**base_info, **d, "Session_UUID": st.session_state.exp_id}
+        final_rows.append(row)
     
-    final_df = pd.DataFrame(rows)
+    df_new = pd.DataFrame(final_rows)
+    
+    # 保存逻辑
     try:
-        old = conn.read(worksheet="Sheet1")
-        updated = pd.concat([old, final_df], ignore_index=True)
-        conn.update(worksheet="Sheet1", data=updated)
-        st.success("数据已同步！")
-    except: st.warning("自动同步失败，请下载。")
-    st.download_button("下载结果 CSV", final_df.to_csv(index=False).encode('utf-8-sig'), "Result.csv")
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        # 读取旧数据
+        try:
+            existing_data = conn.read(worksheet="Sheet1")
+            updated_df = pd.concat([existing_data, df_new], ignore_index=True)
+        except:
+            updated_df = df_new
+            
+        # 写回
+        conn.update(worksheet="Sheet1", data=updated_df)
+        st.success("数据已同步至云端数据库。")
+    except Exception as e:
+        st.warning(f"自动同步失败 (可能是网络原因)，请务必点击下方按钮手动下载数据：")
+        
+    st.download_button("点击下载实验数据 (CSV)", df_new.to_csv(index=False).encode('utf-8-sig'), f"Result_{base_info.get('Name','trial')}.csv")
