@@ -241,13 +241,12 @@ elif current_stage == "CDT_PRACTICE":
 
     # 2. 自动循环逻辑
     elif st.session_state.is_running:
-        
-        # --- 阶段 A: 注视点 (+) ---
         if st.session_state.cdt_step == "FIXATION":
             with placeholder.container():
-                st.markdown(f"<p style='text-align:right;'>组次: {st.session_state.trial_num}/{TOTAL_PRACTICE}</p>", unsafe_allow_html=True)
-                st.markdown("<h1 style='color:red; text-align:center; font-size:120px; padding:100px 0;'>+</h1>", unsafe_allow_html=True)
-                time.sleep(1.0)
+                st.write("")
+                st.markdown("<h1 style='color:red; text-align:center; font-size:120px; margin-top:150px;'>+</h1>", unsafe_allow_html=True)
+            time.sleep(1.0)
+            # 强制清屏并进入下一步
             st.session_state.cdt_step = "MEMORY"
             st.rerun()
 
@@ -271,14 +270,16 @@ elif current_stage == "CDT_PRACTICE":
                     
                     # 宫格呈现 2x2
                     c1, c2 = st.columns(2)
-                    c1.image(os.path.join(folder, sel_imgs[0]), use_container_width=True)
-                    c1.image(os.path.join(folder, sel_imgs[1]), use_container_width=True)
-                    c2.image(os.path.join(folder, sel_imgs[2]), use_container_width=True)
-                    c2.image(os.path.join(folder, sel_imgs[3]), use_container_width=True)
-                    time.sleep(1.0)
+                    with c1:
+                        st.image(os.path.join(folder, sel_imgs[0]), use_container_width=True)
+                        st.image(os.path.join(folder, sel_imgs[1]), use_container_width=True)
+                    with c2:
+                        st.image(os.path.join(folder, sel_imgs[2]), use_container_width=True)
+                        st.image(os.path.join(folder, sel_imgs[3]), use_container_width=True)
                 except Exception as e:
-                    st.error(f"图片读取错误，请检查 neutral 文件夹: {e}")
+                    st.error(f"图片显示失败: {e}")
                     st.stop()
+            time.sleep(1.0) # 严格 1.0 秒
             st.session_state.cdt_step = "MASK"
             st.rerun()
 
@@ -286,7 +287,7 @@ elif current_stage == "CDT_PRACTICE":
         elif st.session_state.cdt_step == "MASK":
             with placeholder.container():
                 st.image(get_noise_img(), use_container_width=True)
-                time.sleep(2.2)
+            time.sleep(2.2)
             st.session_state.cdt_step = "JUDGE"
             st.rerun()
 
