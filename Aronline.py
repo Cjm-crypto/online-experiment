@@ -233,7 +233,7 @@ elif current_stage == "PRACTICE_INTRO":
     if st.button("准备好后，点击开始练习"): next_stage()
 # 9. CDT 练习逻辑 (10组，60%要求)
 elif current_stage == "CDT_PRACTICE":
-    total = 10
+    TOTAL_PRACTICE = 10
     st.markdown(f"### 练习阶段 ({st.session_state.cdt_trial}/{total_practice})")
     placeholder = st.empty()
 
