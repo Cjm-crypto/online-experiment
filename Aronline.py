@@ -95,6 +95,7 @@ def next_stage():
     st.session_state.stage_idx += 1
     st.session_state.trial_status = "READY"
     st.session_state.cdt_trial = 1
+    st.session_state.correct_count = 0
     st.rerun()
 
 def play_beep():
@@ -231,69 +232,45 @@ elif current_stage == "PRACTICE_INTRO":
     if st.button("准备好后，点击开始练习"): next_stage()
 # 9. CDT 练习逻辑 (5组，60%要求)
 elif current_stage == "CDT_PRACTICE":
-    total = 5
+    total = 10
     st.markdown(f"### 练习阶段 ({st.session_state.cdt_trial}/{total})")
     placeholder = st.empty()
 
     if st.session_state.trial_status == "READY":
-        if st.button(f"开始第 {st.session_state.cdt_trial} 组练习"):
-            st.session_state.trial_status = "PLAYING"
-            st.rerun()
-
-    elif st.session_state.trial_status == "PLAYING":
-        with placeholder.container():
-            st.markdown("<h1 style='color:red; text-align:center;'>+</h1>", unsafe_allow_html=True)
-            time.sleep(1.0)
-            
-            # 尝试加载真实本地图片，没有则使用高亮文本提示
-            selected, probe, is_correct, folder = get_cdt_stimulus("neutral")
-            if selected:
-                col1, col2 = st.columns(2)
-                col1.image(os.path.join(folder, selected[0]), use_column_width=True)
-                col1.image(os.path.join(folder, selected[1]), use_column_width=True)
-                col2.image(os.path.join(folder, selected[2]), use_column_width=True)
-                col2.image(os.path.join(folder, selected[3]), use_column_width=True)
-                st.session_state.current_probe_img = os.path.join(folder, probe)
-            else:
-                st.info("【 4张面孔 记忆中... (本地文件夹无图片) 】")
-                st.session_state.current_probe_img = None
-                
-            time.sleep(1.8)
-            st.markdown("<h3 style='text-align:center;'>【 噪音掩码 】</h3>", unsafe_allow_html=True)
-            time.sleep(0.6)
-            
-            st.session_state.ans_correct = is_correct
-            st.session_state.trial_status = "WAITING"
-            st.rerun()
+        if st.button(f"开始第 {st.session_state.cdt_trial} 组测试"):
+            with placeholder.container():
+                st.markdown("<h1 style='color:red; text-align:center;'>+</h1>", unsafe_allow_html=True); time.sleep(1.0)
+                st.write("### 记忆 4 张面孔中..."); time.sleep(1.0)
+                st.write("### [ 噪音掩码 ]"); time.sleep(2.2)
+                st.session_state.ans_correct = random.choice([True, False])
+                st.session_state.start_time = time.time()
+                st.session_state.trial_status = "WAITING"; st.rerun()
 
     elif st.session_state.trial_status == "WAITING":
-        st.markdown("#### 判断：最后出现的这张脸在刚才那组（4张脸）中出现过吗？")
-        if st.session_state.current_probe_img:
-            st.image(st.session_state.current_probe_img, width=250)
-        else:
-            st.info("【 探测面孔 】")
-            
+        st.write("#### 判断：这张脸刚才出现过吗？")
         c1, c2 = st.columns(2)
         resp = None
         if c1.button("F (出现过)"): resp = True
         if c2.button("J (没出现)"): resp = False
         
         if resp is not None:
-            if resp == st.session_state.ans_correct:
-                st.session_state.correct_count += 1
-            st.session_state.trial_status = "READY"
+            is_correct = (resp == st.session_state.ans_correct)
+            if is_correct: st.session_state.correct_count += 1
+            # 显示反馈 (独立页面效果)
+            placeholder.success("正确！") if is_correct else placeholder.error("错误！")
+            time.sleep(1.0)
+            
             if st.session_state.cdt_trial < total:
-                st.session_state.cdt_trial += 1
+                st.session_state.cdt_trial += 1; st.session_state.trial_status = "READY"; st.rerun()
             else:
                 acc = st.session_state.correct_count / total
-                if acc < 0.6: 
-                    st.error(f"正确率 {acc*100:.0f}% 未达 60%，即将重测。")
-                    time.sleep(2)
-                    st.session_state.cdt_trial = 1
-                    st.session_state.correct_count = 0
+                st.write(f"练习结束，正确率: {acc*100:.0f}%")
+                if acc < 0.6:
+                    if st.button("未达 60%，点击重新练习"): 
+                        st.session_state.cdt_trial = 1; st.session_state.correct_count = 0
+                        st.session_state.trial_status = "READY"; st.rerun()
                 else:
-                    next_stage()
-            st.rerun()
+                    st.success("正确率达标！即将自动进入下一阶段..."); time.sleep(2); next_stage()
 
 # 10. 诱发视频播放
 elif current_stage == "VIDEO_INDUCTION":
@@ -307,12 +284,12 @@ elif current_stage == "VIDEO_INDUCTION":
 elif current_stage == "WRITING":
     st.markdown("### 正如刚才视频中那种颠倒黑白、令人窒息的不公与气愤。")
     st.markdown("请在下方输入框写下你人生中经历过的，最让你感到**【被严重误解、不公平对待、极度挫败却又无能为力】**的一个事件。")
-    txt = st.text_area("书写框...", height=300)
-    countdown_timer(180, "书写剩余时间")
-    play_beep()
-    if st.button("书写完毕（或提前结束）"):
-        st.session_state.results["Writing_Content"] = txt
-        next_stage()
+    txt = st.text_area("书写框：", height=300)
+    timer_p = st.empty()
+    for i in range(180, -1, -1):
+        timer_p.markdown(f"## ⏳ 剩余时间: {i} 秒"); time.sleep(1)
+    st.session_state.results["Writing"] = txt
+    st.success("时间到！自动进入下一阶段"); time.sleep(1.5); next_stage()
 
 # 12. 引导反刍 (45s x 4)
 elif current_stage == "RUMINATION":
@@ -322,23 +299,15 @@ elif current_stage == "RUMINATION":
         "想一想，这件事的发生，是不是暴露出了你骨子里的弱点？",
         "想一想，这件事对你现在的状态，究竟造成了多大无法挽回的负面影响？"
     ]
-    if 'rum_idx' not in st.session_state: 
-        st.session_state.rum_idx = 0
-        st.session_state.rum_timer_started = False
-
-    st.markdown(f"## 深度思考 ({st.session_state.rum_idx+1}/{len(prompts)})")
+    if 'rum_idx' not in st.session_state: st.session_state.rum_idx = 0
     st.markdown(f"### {prompts[st.session_state.rum_idx]}")
-    
-    # 强制进行倒计时
-    countdown_timer(45, "思考剩余时间")
+    timer_p = st.empty()
+    for i in range(45, -1, -1):
+        timer_p.markdown(f"## ⏳ 思考倒计时: {i} 秒"); time.sleep(1)
     play_beep()
-    
-    if st.button("进入下一个思考点"):
-        if st.session_state.rum_idx < len(prompts) - 1:
-            st.session_state.rum_idx += 1
-            st.rerun()
-        else:
-            next_stage()
+    if st.session_state.rum_idx < len(prompts)-1:
+        st.session_state.rum_idx += 1; st.rerun()
+    else: next_stage()
 
 # 13. T2 评估
 elif current_stage == "T2_VAS_BSRI":
@@ -364,134 +333,58 @@ if current_stage == "FORMAL_INTRO":
     **唯一区别：**
     正式任务中，每次做出 F 或 J 判断后，请进行 **【信心检测】**。
     请根据 1-5 数字进行选择，1 代表完全猜测，5 代表非常确定。
-    
-    【温馨提示】：请确保您的输入法处于【英文】状态。
+
     准备好后，点击下方按钮开始第一组任务。
     """)
+    if st.button("开始正式任务"): 
+    # 平衡逻辑
+    b_list = [("中性", "neutral"), ("负性", "negative")]
+    if len(st.session_state.results.get('Name','')) % 2 == 0: b_list.reverse()
+    st.session_state.blocks_order = b_list; next_stage()
     
-    # 【自动平衡逻辑】：根据编号末位奇偶决定 Block 顺序
-    if 'blocks_order' not in st.session_state:
-        # 定义两组
-        b_list = [("中性模块", "neutral", 1.8), ("负性模块", "negative", 1.8)]
-        # 获取编号最后一位数字
-        sub_id = st.session_state.results.get('ID', 'A01')
-        try:
-            last_digit = int(''.join(filter(str.isdigit, sub_id))[-1])
-            if last_digit % 2 == 0:
-                b_list.reverse() # 偶数则反转顺序
-        except:
-            pass 
-        st.session_state.blocks_order = b_list
-
-    if st.button("开始第一组任务"):
-        next_stage()
-
-# 15. 正式 CDT 逻辑
+ # 核心修改：正式 CDT 逻辑 (记录 RT 和信心)
 elif current_stage == "CDT_FORMAL":
-    # 获取当前组的信息
-    block_name, folder, enc_time = st.session_state.blocks_order[st.session_state.block_idx]
-    total_trials = 55 # 每组 55 次
-    
-    # A. 如果正在进行“加强诱发环节” (Block 间提示)
+    block_name, folder = st.session_state.blocks_order[st.session_state.block_idx]
+    total = 60
     if st.session_state.in_boost_phase:
-        st.markdown(f"### 第一组任务已完成。接下来进行第二组任务：**{st.session_state.blocks_order[1][0]}**。")
-        st.write("---")
-        st.markdown("### 请再次闭上眼，回想刚才令你痛苦、气愤的事件")
-        st.markdown("### 努力重新沉浸在那种情绪中。**请务必专心！**")
-        
-        # 60秒倒计时
-        countdown_timer(60, "回想倒计时")
-        play_beep() # 叮！
-        
-        st.success("加强环节结束。准备好后，点击下方按钮开始第二组任务。")
-        if st.button("开始第二组任务"):
-            st.session_state.in_boost_phase = False
-            st.session_state.cdt_trial = 1
-            st.rerun()
-
-    # B. 正常的试次逻辑
+        st.markdown("### 第一组完成，请闭眼回想气愤事件 (60s)"); time.sleep(60); play_beep()
+        if st.button("开始第二组"): st.session_state.in_boost_phase = False; st.session_state.cdt_trial = 1; st.rerun()
     else:
-        st.markdown(f"## {block_name} ({st.session_state.cdt_trial} / {total_trials})")
+        st.markdown(f"### {block_name} 模块 ({st.session_state.cdt_trial}/{total})")
         placeholder = st.empty()
-
-        # 状态 1: 准备好
         if st.session_state.trial_status == "READY":
-            if st.button(f"开始第 {st.session_state.cdt_trial} 组测试", key=f"formal_btn_{st.session_state.block_idx}_{st.session_state.cdt_trial}"):
-                st.session_state.trial_status = "PLAYING"
-                st.rerun()
-
-        # 状态 2: 播放序列
-        elif st.session_state.trial_status == "PLAYING":
-            with placeholder.container():
-                st.markdown("<h1 style='color:red; text-align:center;'>+</h1>", unsafe_allow_html=True)
-                time.sleep(1.0)
-                
-                # 读取图片
-                selected, probe, is_correct, _ = get_cdt_stimulus(folder)
-                if selected:
-                    col1, col2 = st.columns(2)
-                    col1.image(os.path.join(folder, selected[0]), use_column_width=True)
-                    col1.image(os.path.join(folder, selected[1]), use_column_width=True)
-                    col2.image(os.path.join(folder, selected[2]), use_column_width=True)
-                    col2.image(os.path.join(folder, selected[3]), use_column_width=True)
-                    st.session_state.current_probe_img = os.path.join(folder, probe)
-                else:
-                    st.write("【 4张面孔 记忆中... 】")
-                    st.session_state.current_probe_img = None
-                
-                time.sleep(enc_time) # 1.8秒
-                st.markdown("<h3 style='text-align:center;'>【 噪音掩码 】</h3>", unsafe_allow_html=True)
-                time.sleep(0.6)
-                
-                st.session_state.ans_correct = is_correct
-                st.session_state.trial_status = "WAITING"
-                st.rerun()
-
-        # 状态 3: 判断响应
+            if st.button(f"开始本组试次"):
+                with placeholder.container():
+                    st.markdown("<h1 style='color:red;'>+</h1>", unsafe_allow_html=True); time.sleep(1.0)
+                    st.write("【 记忆中... 】"); time.sleep(0.8) # 正式设为 1.8s
+                    st.write("【 掩码 】"); time.sleep(2.2)
+                    st.session_state.ans_correct = random.choice([True, False])
+                    st.session_state.start_time = time.time()
+                    st.session_state.trial_status = "WAITING"; st.rerun()
+        
         elif st.session_state.trial_status == "WAITING":
-            st.markdown("#### 判断：这张脸出现过吗？")
-            if st.session_state.current_probe_img:
-                st.image(st.session_state.current_probe_img, width=250)
-            
+            st.write("#### 这张脸出现过吗？")
             c1, c2 = st.columns(2)
             res = None
             if c1.button("F (出现过)"): res = "F"
             if c2.button("J (没出现)"): res = "J"
-            
             if res:
-                st.session_state.current_resp = res
-                st.session_state.trial_status = "CONFIDENCE"
-                st.rerun()
-
-        # 状态 4: 信心检测 (1-5)
-        elif st.session_state.trial_status == "CONFIDENCE":
-            st.markdown(f"#### 您刚才的选择是：**{st.session_state.current_resp}**")
-            conf = st.select_slider("请评估您刚才判断的【信心程度】（1=完全猜测，5=非常确定）：", options=[1, 2, 3, 4, 5], value=3)
-            
-            if st.button("确认并进入下一题"):
-                # 保存详尽数据
-                st.session_state.cdt_data.append({
-                    "Block": block_name,
-                    "Trial": st.session_state.cdt_trial,
-                    "Response": st.session_state.current_resp,
-                    "Confidence": conf,
-                    "Correct": (st.session_state.current_resp == "F" and st.session_state.ans_correct) or (st.session_state.current_resp == "J" and not st.session_state.ans_correct)
-                })
+                st.session_state.rt = time.time() - st.session_state.start_time
+                st.session_state.cur_res = res
+                st.session_state.trial_status = "CONF"; st.rerun()
                 
-                # 检查是否完成本组
-                if st.session_state.cdt_trial < total_trials:
-                    st.session_state.cdt_trial += 1
-                    st.session_state.trial_status = "READY"
-                else:
-                    # 本组完成
-                    if st.session_state.block_idx == 0:
-                        # 第一组结束，进入加强环节
-                        st.session_state.block_idx = 1
-                        st.session_state.in_boost_phase = True
-                        st.session_state.trial_status = "READY"
-                    else:
-                        # 第二组也结束，进入下一实验阶段
-                        next_stage()
+        elif st.session_state.trial_status == "CONF":
+            conf = st.select_slider("信心评价 (1-5)", options=[1,2,3,4,5], value=3)
+            if st.button("提交结果"):
+                acc = 1 if (st.session_state.cur_res=="F" and st.session_state.ans_correct) or (st.session_state.cur_res=="J" and not st.session_state.ans_correct) else 0
+                st.session_state.cdt_data.append({
+                    "Block": block_name, "Trial": st.session_state.cdt_trial, "Resp": st.session_state.cur_res, 
+                    "Correct": acc, "RT": round(st.session_state.rt, 3), "Conf": conf, "Is_Same": st.session_state.ans_correct
+                })
+                st.session_state.trial_status = "READY"
+                if st.session_state.cdt_trial < total: st.session_state.cdt_trial += 1
+                elif st.session_state.block_idx == 0: st.session_state.block_idx = 1; st.session_state.in_boost_phase = True
+                else: next_stage()
                 st.rerun()
 
 
@@ -507,26 +400,27 @@ elif current_stage == "RECOVERY":
 
 # 17. 在实验结束阶段 (FINISH)
 elif current_stage == "FINISH":
-    st.title("实验全部完成！")
-    all_data = {**st.session_state.results}
-    # 将 CDT 55*2 条数据平铺
+    st.title("实验完成！感谢参与。")
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    
+    # 构建每一行数据 (每个 Trial 一行，匹配你提供的 Python 逻辑)
+    rows = []
+    base = st.session_state.results
     for d in st.session_state.cdt_data:
-        key = f"{d['Block']}_T{d['Trial']}"
-        all_data[f"{key}_Resp"] = d["Resp"]; all_data[f"{key}_Conf"] = d["Conf"]
+        row = {
+            "ID": base.get("Name"), "Gender": base.get("Sex"), "Age": base.get("Age"),
+            "RRS_Sum": base.get("RRS_Sum"), "BDI_Sum": base.get("BDI_Sum"), "STAI_Sum": base.get("STAI_Sum"),
+            "T1_Aro": base.get("T1_Aro"), "T1_Valence": base.get("T1_Val"), "T2_Aro": base.get("T2_Aro"),
+            "Block": d["Block"], "Trial": d["Trial"], "Is_Same": d["Is_Same"], 
+            "Resp": d["Resp"], "Correct": d["Correct"], "RT": d["RT"], "Conf": d["Conf"]
+        }
+        rows.append(row)
     
-    final_df = pd.DataFrame([all_data])
-    
-    # Google Sheets 绝不覆盖逻辑：读取 -> 追加 -> 全量写回
+    final_df = pd.DataFrame(rows)
     try:
-        conn = st.connection("gsheets", type=GSheetsConnection)
-        try:
-            old_df = conn.read(worksheet="Sheet1")
-            updated_df = pd.concat([old_df, final_df], ignore_index=True)
-        except:
-            updated_df = final_df # 如果表是空的，则直接写
-        conn.update(worksheet="Sheet1", data=updated_df)
-        st.success("数据已成功同步至主试后台（Google Sheets）！")
-    except Exception as e:
-        st.warning(f"自动保存失败，请点击下方下载数据并发送给主试：{e}")
-    
-    st.download_button("📥 点击下载备份数据 CSV", final_df.to_csv(index=False).encode('utf-8-sig'), f"Data_{all_data.get('Name','user')}.csv")
+        old = conn.read(worksheet="Sheet1")
+        updated = pd.concat([old, final_df], ignore_index=True)
+        conn.update(worksheet="Sheet1", data=updated)
+        st.success("数据已同步！")
+    except: st.warning("自动同步失败，请下载。")
+    st.download_button("下载结果 CSV", final_df.to_csv(index=False).encode('utf-8-sig'), "Result.csv")
