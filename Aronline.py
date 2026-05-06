@@ -116,7 +116,7 @@ def countdown_timer(seconds, message):
 
 
 # 获取本地图片或生成高还原度文本提示的通用函数
-delf get_cdt_stimulus(folder="neutral"):
+def get_cdt_stimulus(folder="neutral"):
     try:
         all_imgs = [f for f in os.listdir(folder) if f.lower().endswith(('.bmp', '.jpg', '.png'))]
         if len(all_imgs) >= 4:
