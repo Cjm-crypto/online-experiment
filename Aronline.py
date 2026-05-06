@@ -431,11 +431,26 @@ elif current_stage == "WRITING":
     st.markdown("请在下方输入框写下你人生中经历过的，最让你感到**【被严重误解、不公平对待、极度挫败却又无能为力】**的一个事件。")
     st.markdown("【倒计时结束后方可点击，若随便点击则倒计时又会从180秒开始】")
     txt = st.text_area("书写框：", height=300)
-    timer_p = st.empty()
-    for i in range(180, -1, -1):
-        timer_p.markdown(f"## ⏳ 剩余时间: {i} 秒"); time.sleep(1)
-    st.session_state.results["Writing"] = txt
-    st.success("时间到！自动进入下一阶段"); time.sleep(1.5); next_stage()
+    if 'w_done' not in st.session_state: st.session_state.w_done = False
+    # 这里的 disabled 会在倒计时结束后锁定输入框，内容不可修改删除
+    txt = st.text_area("书写框：", height=300, value=st.session_state.results.get("Writing", ""), disabled=st.session_state.w_done)
+    if not st.session_state.w_done:
+        t_p = st.empty() # 创建唯一的占位符
+        for i in range(180, -1, -1):
+            t_p.markdown(f"## ⏳ 剩余时间: {i} 秒")
+            time.sleep(1)
+        
+        # 倒计时结束逻辑
+        st.session_state.results["Writing"] = txt
+        st.session_state.w_done = True
+        t_p.empty() # 【修正】倒计时结束立即清空，不留 0 秒行
+        play_beep()
+        time.sleep(0.5) # 【修正】留出时间让声音播放
+        st.rerun()
+    else:
+        # 结束后只保留一个进入下一阶段的按钮，不显示任何“时间到”字样
+        if st.button("进入下一阶段", use_container_width=True):
+            next_stage()
 
 # 12. 引导反刍 (45s x 4)
 elif current_stage == "RUMINATION":
@@ -446,24 +461,27 @@ elif current_stage == "RUMINATION":
         "想一想，这件事对你现在的状态，究竟造成了多大无法挽回的负面影响？"
     ]
     if 'rum_idx' not in st.session_state: st.session_state.rum_idx = 0
-    
+    idx = st.session_state.rum_idx
     # 修改点：显示之前的书写内容，且设为不可编辑 (disabled)
     st.text_area("你刚才记录的事件：", value=st.session_state.results.get("Writing",""), height=200, disabled=True)
-    
-    idx = st.session_state.rum_idx
-    st.markdown(f"### 【请闭眼深度思考】\n{prompts[idx]}")
-    
-    timer_p = st.empty()
+    st.markdown(f"### 【请闭眼深度思考】")
+    st.info(f"**{prompts[idx]}**")
+     # 唯一的倒计时显示区
+    t_p = st.empty()
     for i in range(45, -1, -1):
-        timer_p.markdown(f"## ⏳ 思考倒计时: {i} 秒")
+        t_p.markdown(f"## ⏳ 思考倒计时: {i} 秒")
         time.sleep(1)
     
-    play_beep() # 修改点：倒计时结束响铃
+    # 【修正】逻辑：清空 -> 响铃 -> 等待 -> 跳转
+    t_p.empty() # 彻底清除“0秒”行
+    play_beep()
+    time.sleep(0.8) # 稍微多等一下，确保声音完整播放
     
     if idx < len(prompts) - 1:
         st.session_state.rum_idx += 1
         st.rerun()
     else:
+        # 全部反刍结束，自动进入下一阶段
         next_stage()
 
 # 13--- 后测评估 (修改点4：加入 BSRI) ---
