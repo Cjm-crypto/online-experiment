@@ -13,19 +13,46 @@ st.set_page_config(page_title="工作记忆实验", layout="centered")
 # 使用 CSS 模拟 PsychoPy 黑色背景和居中布局
 st.markdown("""
     <style>
-    .main { background-color: #000000; color: black; }
-    .stMarkdown { text-align: center; font-family: 'Microsoft YaHei'; }
-    h1, h2, h3, h4 { color: #FFFFFF !important; }
-    div.stButton > button { width: 100%; height: 4em; font-size: 18px; background-color: #333333; color:black; border: 1px solid #555; }
-    div.stButton > button:hover { border-color: #FF4B4B; color: #FF4B4B; }
-    .stRadio > label { font-size: 18px !important; color: #EEEEEE !important; }
+    /* 全局背景设为浅灰色 */
+    .main { 
+        background-color: #F5F5F5; 
+        color: #000000; 
+    }
+    /* 所有文字、标签、Markdown 统一设为黑色 */
+    .stMarkdown, p, label, .stSelectbox, .stRadio { 
+        color: #000000 !important; 
+        font-family: 'Microsoft YaHei';
+        font-weight: 500;
+    }
+    /* 标题加粗加黑 */
+    h1, h2, h3, h4 { 
+        color: #000000 !important; 
+        font-weight: bold !important;
+    }
+    /* 按钮样式：蓝色背景，白色文字，增强点击感 */
+    div.stButton > button { 
+        width: 100%; 
+        height: 3.5em; 
+        font-size: 18px; 
+        background-color: #007BFF; 
+        color: white !important; 
+        border: none;
+        border-radius: 8px;
+        box-shadow: 0px 2px 4px rgba(0,0,0,0.1);
+    }
+    div.stButton > button:hover { 
+        background-color: #0056b3; 
+        color: white !important;
+    }
+    /* 单选框间距优化 */
+    .stRadio div[role='radiogroup'] {
+        padding: 10px;
+        background-color: #FFFFFF;
+        border-radius: 10px;
+        border: 1px solid #DDD;
+    }
     </style>
     """, unsafe_allow_html=True)
-if 'stage_idx' not in st.session_state:
-    st.session_state.update({
-        'stage_idx': 0, 'results': {}, 'cdt_data': [], 
-        'cdt_trial': 1, 'correct_count': 0, 'trial_status': "READY"
-    })
 
 def next_stage():
     st.session_state.stage_idx += 1
