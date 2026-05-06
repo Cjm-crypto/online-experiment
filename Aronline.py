@@ -82,7 +82,7 @@ if 'in_boost_phase' not in st.session_state:
 
 # 【核心修复：清理了混入状态变量的 BUG】
 STAGES = [
-    "WELCOME", "INFO", "RRS", "BDI", "STAI", "T1_VAS_BSRI", 
+    "WELCOME", "INFO", "RRS", "BDI", "STAI", "T1_VAS_COMBINED","T1_BSRI_INDEPENDENT", 
     "PRACTICE_INTRO", "CDT_PRACTICE", "VIDEO_INDUCTION", "WRITING", "RUMINATION", 
     "T2_VAS_BSRI", "FORMAL_INTRO", "CDT_FORMAL", "RECOVERY", "FINISH"
 ]
