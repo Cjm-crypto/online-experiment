@@ -23,9 +23,9 @@ def play_beep():
         wav_file.writeframes(audio_data.tobytes())
     st.audio(byte_io.getvalue(), format="audio/wav", autoplay=True)
 
-def get_noise_img():
-    """生成随机噪音图用于掩码"""
-    return np.random.randint(0, 255, (400, 600), dtype=np.uint8)
+def show_noise_mask(placeholder):
+    """显示噪音掩码图"""
+    placeholder.image(get_noise_img(), use_container_width=True)
 
 # --- 1. 基础网页样式配置 (浅色护眼模式) ---
 st.set_page_config(page_title="工作记忆实验", layout="centered")
@@ -81,6 +81,14 @@ if 'cdt_trial' not in st.session_state: st.session_state.cdt_trial = 1
 if 'correct_count' not in st.session_state: st.session_state.correct_count = 0
 if 'block_idx' not in st.session_state: st.session_state.block_idx = 0
 if 'in_boost_phase' not in st.session_state: st.session_state.in_boost_phase = False
+# --- 新增练习阶段需要的初始化 ---
+if 'is_running' not in st.session_state: st.session_state.is_running = False
+if 'cdt_step' not in st.session_state: st.session_state.cdt_step = "FIXATION"
+if 'trial_num' not in st.session_state: st.session_state.trial_num = 1
+if 'practice_correct' not in st.session_state: st.session_state.practice_correct = 0
+# --- 新增正式阶段和保存需要的初始化 ---
+if 'trial_status' not in st.session_state: st.session_state.trial_status = "READY"
+if 'exp_id' not in st.session_state: import uuid; st.session_state.exp_id = str(uuid.uuid4())[:8]
 
 STAGES = [
     "WELCOME", "INFO", "RRS", "BDI", "STAI", "T1_VAS_COMBINED", "T1_BSRI",
@@ -487,27 +495,29 @@ elif current_stage == "FINISH":
     
     # 构建最终数据表
     final_rows = []
-    base_info = st.session_state.results_summary
-    for d in st.session_state.cdt_raw_data:
+    base_info = st.session_state.results 
+    for d in st.session_state.cdt_data:
         row = {**base_info, **d, "Session_UUID": st.session_state.exp_id}
         final_rows.append(row)
     
-    df_new = pd.DataFrame(final_rows)
-    
-    # 保存逻辑
-    try:
-        conn = st.connection("gsheets", type=GSheetsConnection)
-        # 读取旧数据
+    if not final_rows:
+        st.warning("未检测到实验数据。")
+        df_new = pd.DataFrame()
+    else:
+        df_new = pd.DataFrame(final_rows)
+                # 保存逻辑
         try:
+            conn = st.connection("gsheets", type=GSheetsConnection)
+            # 读取并同步逻辑... (保持原样)
             existing_data = conn.read(worksheet="Sheet1")
             updated_df = pd.concat([existing_data, df_new], ignore_index=True)
-        except:
-            updated_df = df_new
+            conn.update(worksheet="Sheet1", data=updated_df)
+            st.success("数据已同步至云端数据库。")
+        except Exception as e:
+            st.warning(f"自动同步未完成，请手动下载。")
             
-        # 写回
-        conn.update(worksheet="Sheet1", data=updated_df)
-        st.success("数据已同步至云端数据库。")
-    except Exception as e:
-        st.warning(f"自动同步失败 (可能是网络原因)，请务必点击下方按钮手动下载数据：")
-        
-    st.download_button("点击下载实验数据 (CSV)", df_new.to_csv(index=False).encode('utf-8-sig'), f"Result_{base_info.get('Name','trial')}.csv")
+        st.download_button(
+            "点击下载实验数据 (CSV)", 
+            df_new.to_csv(index=False).encode('utf-8-sig'), 
+            f"Result_{base_info.get('Name','trial')}.csv"
+        )
