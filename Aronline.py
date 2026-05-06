@@ -13,7 +13,7 @@ st.set_page_config(page_title="工作记忆实验", layout="centered")
 # 使用 CSS 模拟 PsychoPy 黑色背景和居中布局
 st.markdown("""
     <style>
-    .main { background-color: #000000; color: white; }
+    .main { background-color: #000000; color: black; }
     .stMarkdown { text-align: center; font-family: 'Microsoft YaHei'; }
     h1, h2, h3, h4 { color: #FFFFFF !important; }
     div.stButton > button { width: 100%; height: 4em; font-size: 18px; background-color: #333333; color: white; border: 1px solid #555; }
@@ -21,6 +21,36 @@ st.markdown("""
     .stRadio > label { font-size: 18px !important; color: #EEEEEE !important; }
     </style>
     """, unsafe_allow_html=True)
+if 'stage_idx' not in st.session_state:
+    st.session_state.update({
+        'stage_idx': 0, 'results': {}, 'cdt_data': [], 
+        'cdt_trial': 1, 'correct_count': 0, 'trial_status': "READY"
+    })
+
+def next_stage():
+    st.session_state.stage_idx += 1
+    st.session_state.trial_status = "READY"
+    st.session_state.cdt_trial = 1
+    st.session_state.correct_count = 0
+    st.rerun()
+
+# 阶段序列
+STAGES = [
+    "WELCOME", "INFO", "RRS", "BDI", "STAI", "T1_VAS_BSRI", 
+    "PRACTICE_INTRO", "CDT_PRACTICE", 
+    "VIDEO_INDUCTION", "WRITING", "RUMINATION", "T2_VAS_BSRI", 
+    "FORMAL_INTRO", "CDT_FORMAL", 
+    "RECOVERY", "FINISH"
+]
+current_stage = STAGES[st.session_state.stage_idx]
+
+# --- 2. 任务辅助逻辑 ---
+def countdown(seconds, msg):
+    p = st.empty()
+    for i in range(seconds, -1, -1):
+        p.markdown(f"<h2 style='color:red;'>⏳ {msg}: {i} 秒</h2>", unsafe_allow_html=True)
+        time.sleep(1)
+    p.empty()
 
 # --- 2. 实验常量与量表题库 ---
 RRS_ITEMS = ["我究竟做了什么要遭如此报应", "分析新近发生的事情试图找到原因", "想到“我为什么总是有这种反应”", "一个人走开，思考自己为什么会有这种感觉", "记录你自己的想法并做分析", "回想新近的情境，希望情形已经好转", "想到“为什么我有这样问题而别人没有。”", "想到“我为什么不能把事情做得更好一点﹖”", "分析自己的性格试图找到沮丧的原因", "独自去某个地方考虑自己的感受"]
@@ -44,17 +74,7 @@ def countdown_timer(seconds, message):
         time.sleep(1)
     placeholder.empty()
 
-# --- 4. 初始化 Session 状态 ---
-if 'stage_idx' not in st.session_state:
-    st.session_state.stage_idx = 0
-    st.session_state.results = {}
-    st.session_state.cdt_results = []
-    st.session_state.cdt_trial = 1
-
-STAGES = ["WELCOME", "INFO", "RRS", "BDI", "STAI", "T1_VAS_BSRI", "CDT_PRE_INSTR", "CDT_TASK", "VIDEO_INSTR", "VIDEO_PLAY", "WRITING", "RUMINATION", "T2_VAS_BSRI", "CDT_FORMAL", "RECOVERY", "FINISH"]
-current_stage = STAGES[st.session_state.stage_idx]
-
-# --- 5. 实验流程控制 ---
+# --- 4. 实验流程控制 ---
 
 # 1. 欢迎页
 if current_stage == "WELCOME":
@@ -78,102 +98,145 @@ elif current_stage == "INFO":
             next_stage()
 
 # 3-5. 基础问卷 (RRS, BDI, STAI)
-elif current_stage in ["RRS", "BDI", "STAI"]:
-    items = RRS_ITEMS if current_stage=="RRS" else (BDI_ITEMS if current_stage=="BDI" else STAI_ITEMS)
-    st.markdown(f"## 【{current_stage} 问卷阶段】")
-    st.write("根据你的真实情况进行打分：")
-    ans = []
-    for i, q in enumerate(items):
-        r = st.radio(q, [1,2,3,4] if current_stage!="BDI" else [0,1,2,3], horizontal=True, key=f"{current_stage}_{i}")
-        ans.append(r)
-    if st.button("提交本阶段"):
-        st.session_state.results[f"{current_stage}_Sum"] = sum(ans)
+elif current_stage == "RRS":
+    st.markdown("## 【特质反刍问卷】")
+    st.markdown("**打分标准：1=从不，2=有时，3=经常，4=总是**")
+    rrs_res = []
+    for i, q in enumerate(RRS_ITEMS):
+        r = st.radio(f"{i+1}. {q}", [1, 2, 3, 4], horizontal=True, key=f"rrs_{i}")
+        rrs_res.append(r)
+    if st.button("提交 RRS 问卷"):
+        st.session_state.results["RRS_Sum"] = sum(rrs_res)
         next_stage()
+
+elif current_stage == "BDI":
+    st.markdown("## 【BDI-II 抑郁量表】")
+    st.markdown("**打分标准：请根据描述选择：0=无/很少，1=轻度，2=中度，3=严重**")
+    bdi_res = []
+    for i, q in enumerate(BDI_ITEMS):
+        r = st.radio(f"{i+1}. {q}", [0, 1, 2, 3], horizontal=True, key=f"bdi_{i}")
+        bdi_res.append(r)
+    if st.button("提交 BDI 问卷"):
+        st.session_state.results["BDI_Sum"] = sum(bdi_res)
+        next_stage()
+
+elif current_stage == "STAI":
+    st.markdown("## 【STAI-T 特质焦虑问卷】")
+    st.markdown("**打分标准：1=几乎没有，2=有些，3=经常，4=几乎总是**")
+    stai_res = []
+    for i, q in enumerate(STAI_ITEMS):
+        r = st.radio(f"{i+1}. {q}", [1, 2, 3, 4], horizontal=True, key=f"stai_{i}")
+        stai_res.append(r)
+    if st.button("提交 STAI 问卷"):
+        st.session_state.results["STAI_Sum"] = sum(stai_res)
+        next_stage()
+
 
 # 6 & 13. VAS 与 BSRI
-elif current_stage in ["T1_VAS_BSRI", "T2_VAS_BSRI"]:
-    tag = "前测" if "T1" in current_stage else "后测"
-    st.markdown(f"## 评估环节 ({tag})")
+elif current_stage == "T1_VAS_COMBINED":
+    st.markdown("## 状态评估 (T1)")
     
-    st.markdown("#### 请评估你此刻的【生理与心理唤醒度】")
-    st.write("0-30: 平静/放松；40-60: 轻微紧张；70-100: 非常强烈紧张")
-    aro = st.slider("滑动滑块打分", 0, 100, 50, key=f"{current_stage}_aro")
+    # 唤醒度部分
+    st.markdown("### 1. 请评估你此刻的【生理与心理唤醒度】")
+    st.write("(如：心跳加速、警觉、紧张感)")
+    st.info("【打分参考】\n\n0 - 30：感到平静、放松、没有波澜\n\n40 - 60：中等程度的激活，感到轻微的紧张或气愤\n\n70 - 100：非常强烈的紧张、气愤或激动")
+    t1_aro = st.select_slider("滑动滑块评估唤醒度", options=list(range(101)), value=50, key="t1_aro_val")
     
-    st.markdown("#### 请评估你此刻的【情绪效价】")
-    st.write("0-30: 极度郁闷；40-60: 情绪中立；70-100: 极度开心")
-    val = st.slider("滑动滑块打分", 0, 100, 50, key=f"{current_stage}_val")
+    st.markdown("---")
     
-    st.write("---")
-    st.markdown("#### BSRI 评估")
-    st.write("1=完全不符合，4=中立，7=完全符合")
-    bs_ans = []
-    for i, q in enumerate(BSRI_ITEMS):
-        r = st.radio(q, [1,2,3,4,5,6,7], horizontal=True, key=f"{current_stage}_bs_{i}")
-        bs_ans.append(r)
-    if st.button("确认提交"):
-        st.session_state.results.update({f"{tag}_Aro": aro, f"{tag}_Val": val, f"{tag}_BSRI_Sum": sum(bs_ans)})
+    # 效价部分
+    st.markdown("### 2. 请评估你此刻的【情绪效价】")
+    st.info("【打分参考】\n\n0 - 30：感到偏向负面、郁郁、痛苦\n\n40 - 60：情绪中立，没有明显的好坏\n\n70 - 100：感到偏向正面、开心、愉悦")
+    t1_val = st.select_slider("滑动滑块评估效价", options=list(range(101)), value=50, key="t1_val_val")
+    
+    if st.button("确认提交以上评估"):
+        st.session_state.results["T1_Arousal"] = t1_aro
+        st.session_state.results["T1_Valence"] = t1_val
+        next_stage()
+# --- 6. T1 BSRI 评估 (独立界面) ---
+elif current_stage == "T1_BSRI_INDEPENDENT":
+    st.markdown("## 状态评估 (BSRI)")
+    st.write("请根据此刻的真实感受，对以下描述进行打分（1=完全不符合，7=完全符合）：")
+    bsri_res = []
+    for i, q in enumerate(BSRI_QUESTIONS):
+        r = st.radio(q, [1, 2, 3, 4, 5, 6, 7], horizontal=True, key=f"t1_bsri_{i}")
+        bsri_res.append(r)
+    if st.button("确认提交 BSRI"):
+        st.session_state.results["T1_BSRI_Sum"] = sum(bsri_res)
         next_stage()
 
+
 # 7. CDT 任务指导语 (还原文档)
-elif current_stage == "CDT_PRE_INSTR":
-    st.markdown("## 接下来的任务流程")
-    st.write("1. 屏幕中央会出现红色的“+”，请盯住它。")
-    st.write("2. 随后屏幕会闪现【4张面孔】，请努力记住他们的特征。")
-    st.write("3. 接着屏幕短暂空白后，会出现【1张面孔】。")
-    st.markdown("### **请判断：最后出现的这张脸，是否在刚才那组（4张脸）中出现过？**")
-    if st.button("进入测试"): next_stage()
+elif current_stage == "PRACTICE_INTRO":
+    st.markdown("## 下面进入【练习阶段】")
+    st.markdown("""
+    接下来的练习旨在帮您熟悉任务流程：
+    1. 屏幕中央会出现一个红色的“+”字，请盯住它。
+    2. 随后，屏幕会闪现【4张面孔】，请努力记住它们的脸部特征。
+    3. 接着屏幕会短暂空白。
+    4. 最后，屏幕中央会出现【1张面孔】。
 
-# 8 & 14. CDT 任务主体 (F/J 按钮版)
-elif current_stage in ["CDT_PRACTICE", "CDT_FORMAL"]:
-    is_formal = (current_stage == "CDT_FORMAL")
-    total_trials = 5 if not is_formal else 20
-    st.markdown(f"### CDT 任务 ({st.session_state.cdt_trial} / {total_trials})")
-    
-    if st.button(f"点击开始第 {st.session_state.cdt_trial} 组测试", key=f"btn_{st.session_state.cdt_trial}"):
-        placeholder = st.empty()
-        # 1. 注视点
-        placeholder.markdown("<h1 style='color: red;'>+</h1>", unsafe_allow_html=True)
-        time.sleep(1.0)
-        # 2. 记忆项
-        placeholder.empty()
-        try:
-            folder = "neutral"
-            all_imgs = [f for f in os.listdir(folder) if f.lower().endswith(('.bmp', '.jpg', '.png'))]
-            sel = random.sample(all_imgs, 1) # 演示仅显示1张，防止加载慢
-            placeholder.image(os.path.join(folder, sel[0]), width=400)
-            time.sleep(1.8)
-            # 3. 掩码
-            placeholder.empty()
-            placeholder.markdown("### [ 噪音掩码 ]")
-            time.sleep(0.6)
-            placeholder.empty()
-            st.session_state.waiting_resp = True
-        except Exception as e:
-            st.error(f"图片文件夹错误: {e}")
+    **请判断：**
+    最后出现的这张脸，是否在刚才那组（4张脸）中出现过？
+    - 如果是（**一样/出现过**），请点击屏幕上的 **【F】** 按钮；
+    - 如果不是（**全新/没出现过**），请点击屏幕上的 **【J】** 按钮。
 
-    if st.session_state.get('waiting_resp'):
-        st.markdown("#### 判断探测面孔是否出现过？")
+    *正确率未达 60% 会持续练习。*
+    **【温馨提示】：请确保您的输入法处于【英文】状态。**
+    """)
+    if st.button("准备好后，点击开始练习"): next_stage()
+# 5. CDT 练习逻辑 (5组，60%要求)
+elif current_stage == "CDT_PRACTICE":
+    total = 5
+    st.markdown(f"### 练习阶段 ({st.session_state.cdt_trial}/{total})")
+    placeholder = st.empty()
+
+    if st.session_state.trial_status == "READY":
+        if st.button(f"开始第 {st.session_state.cdt_trial} 组练习"):
+            st.session_state.trial_status = "PLAYING"; st.rerun()
+
+    elif st.session_state.trial_status == "PLAYING":
+        with placeholder.container():
+            st.markdown("<h1 style='color:red;'>+</h1>", unsafe_allow_html=True); time.sleep(1.0)
+            # 模拟显示4张图
+            st.write("【 4张面孔 记忆中... 】"); time.sleep(1.8)
+            st.write("【 噪音掩码 】"); time.sleep(0.6)
+            st.session_state.ans_correct = random.choice([True, False]) # 模拟答案
+            st.session_state.trial_status = "WAITING"; st.rerun()
+
+    elif st.session_state.trial_status == "WAITING":
+        st.markdown("#### 判断：这张脸出现过吗？")
         c1, c2 = st.columns(2)
         if c1.button("F (出现过)"):
-            st.session_state.cdt_results.append({"Stage": current_stage, "Resp": "F"})
-            st.session_state.waiting_resp = False
-            if st.session_state.cdt_trial < total_trials: st.session_state.cdt_trial += 1; st.rerun()
-            else: st.session_state.cdt_trial = 1; next_stage()
+            if st.session_state.ans_correct: st.session_state.correct_count += 1
+            st.session_state.trial_status = "READY"
+            if st.session_state.cdt_trial < total: st.session_state.cdt_trial += 1
+            else:
+                acc = st.session_state.correct_count / total
+                if acc < 0.6: 
+                    st.error(f"正确率 {acc*100}% 未达标，重新练习"); time.sleep(2)
+                    st.session_state.cdt_trial = 1; st.session_state.correct_count = 0
+                else: next_stage()
+            st.rerun()
         if c2.button("J (没出现)"):
-            st.session_state.cdt_results.append({"Stage": current_stage, "Resp": "J"})
-            st.session_state.waiting_resp = False
-            if st.session_state.cdt_trial < total_trials: st.session_state.cdt_trial += 1; st.rerun()
-            else: st.session_state.cdt_trial = 1; next_stage()
+            if not st.session_state.ans_correct: st.session_state.correct_count += 1
+            st.session_state.trial_status = "READY"
+            if st.session_state.cdt_trial < total: st.session_state.cdt_trial += 1
+            else:
+                acc = st.session_state.correct_count / total
+                if acc < 0.6: 
+                    st.error(f"正确率 {acc*100}% 未达标，重新练习"); time.sleep(2)
+                    st.session_state.cdt_trial = 1; st.session_state.correct_count = 0
+                else: next_stage()
+            st.rerun()
 
 # 10. 诱发视频播放
-elif current_stage == "VIDEO_PLAY":
-    st.markdown("### 请全神贯注观看视频")
-    if os.path.exists("Shenpan.mp4"):
-        st.video("Shenpan.mp4")
-        if st.button("视频已播放结束"): next_stage()
-    else:
-        st.error("视频缺失")
-        if st.button("跳过"): next_stage()
+elif current_stage == "VIDEO_INDUCTION":
+    st.markdown("### 接下来，您将观看一段电影片段。")
+    st.markdown("请佩戴好耳机，保持安静，全程不要转移视线。")
+    st.markdown("请尽量让自己【完全沉浸】在画面的情境与情绪中。")
+    if os.path.exists("Shenpan.mp4"): st.video("Shenpan.mp4")
+    if st.button("播放完毕"): next_stage()
 
 # 11. 书写阶段 (180s 倒计时)
 elif current_stage == "WRITING":
@@ -205,6 +268,60 @@ elif current_stage == "RUMINATION":
             st.rerun()
         else:
             next_stage()
+
+# 9. T2 评估
+elif current_stage == "T2_VAS_BSRI":
+    st.header("状态评估 (后测)")
+    st.slider("唤醒度", 0, 100, 50); st.slider("效价", 0, 100, 50)
+    if st.button("提交评估"): next_stage()
+
+# 10. 正式阶段 CDT 指导语 (全面还原)
+elif current_stage == "FORMAL_INTRO":
+    st.markdown("## 下面进行【正式实验任务】")
+    st.markdown("""
+    正式任务的要求与刚才练习阶段 **【完全一致】**。
+    唯一的区别是：
+    1. 正式任务包含 **20 组**。
+    2. 每次做出 F 或 J 判断后，请点击下方滑块评估您对刚才判断的 **【信心程度】**。
+    
+    1 代表完全猜测，5 代表非常有信心。
+    
+    准备好后，点击下方按钮开始正式任务。
+    """)
+    if st.button("开始正式任务"): next_stage()
+
+# 11. 正式 CDT 逻辑 (20组 + 信心评分)
+elif current_stage == "CDT_FORMAL":
+    total = 20
+    st.markdown(f"### 正式阶段 ({st.session_state.cdt_trial}/{total})")
+    placeholder = st.empty()
+
+    if st.session_state.trial_status == "READY":
+        if st.button(f"开始第 {st.session_state.cdt_trial} 组正式测试"):
+            st.session_state.trial_status = "PLAYING"; st.rerun()
+
+    elif st.session_state.trial_status == "PLAYING":
+        with placeholder.container():
+            st.markdown("<h1 style='color:red;'>+</h1>", unsafe_allow_html=True); time.sleep(1.0)
+            st.write("【 4张面孔 记忆中... 】"); time.sleep(1.8)
+            st.write("【 噪音掩码 】"); time.sleep(0.6)
+            st.session_state.trial_status = "WAITING"; st.rerun()
+
+    elif st.session_state.trial_status == "WAITING":
+        st.markdown("#### 判断：这张脸出现过吗？")
+        c1, c2 = st.columns(2)
+        resp = None
+        if c1.button("F (出现过)"): resp = "F"
+        if c2.button("J (没出现)"): resp = "J"
+        
+        if resp:
+            conf = st.select_slider("信心评价", options=[1,2,3,4,5], value=3)
+            if st.button("确认提交本组结果"):
+                st.session_state.cdt_data.append({"Trial": st.session_state.cdt_trial, "Resp": resp, "Conf": conf})
+                st.session_state.trial_status = "READY"
+                if st.session_state.cdt_trial < total: st.session_state.cdt_trial += 1
+                else: next_stage()
+                st.rerun()
 
 # 阶段 12:恢复阶段
 elif current_stage == "RECOVERY":
