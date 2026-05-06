@@ -264,57 +264,63 @@ def cdt_task_fragment(mode="practice"):
             st.rerun()
 
     elif st.session_state.cdt_step == "FEEDBACK":
-        # 1. 呈现反馈文字 (0.6秒)
+        # 1. 呈现反馈文字 (使用静态 HTML 容器防止页面高度抖动闪烁)
         if st.session_state.is_correct:
-            st.session_state.practice_correct += 1
-            placeholder.markdown('<div style="height:60px; line-height:60px; text-align:center; background-color:#d4edda; color:#155724; border-radius:10px; font-weight:bold; font-size:24px;">✔ 正 确</div>', unsafe_allow_html=True)
+            st.session_state.practice_correct += 1 # 计数（练习和正式通用）
+            feedback_html = '<div style="height:60px; line-height:60px; text-align:center; background-color:#d4edda; color:#155724; border-radius:10px; font-weight:bold; font-size:24px; margin-top:10px;">✔ 正 确</div>'
         else:
-            placeholder.markdown('<div style="height:60px; line-height:60px; text-align:center; background-color:#f8d7da; color:#721c24; border-radius:10px; font-weight:bold; font-size:24px;">✘ 错 误</div>', unsafe_allow_html=True)
-        time.sleep(0.6)
+            feedback_html = '<div style="height:60px; line-height:60px; text-align:center; background-color:#f8d7da; color:#721c24; border-radius:10px; font-weight:bold; font-size:24px; margin-top:10px;">✘ 错 误</div>'
         
-        # 2. 检查是否还有剩余试次
+        placeholder.markdown(feedback_html, unsafe_allow_html=True)
+        time.sleep(0.6) # 反馈呈现 0.6 秒
+
+        # 2. 判断是继续下一题还是结束当前 Block
         if st.session_state.trial_num < total_trials:
-            # 自动进入下一题
+            # --- 自动进入下一题 ---
             st.session_state.trial_num += 1
             st.session_state.cdt_step = "AUTO_SEQ"
             st.rerun()
         else:
-            # --- 10组全部结束，进入结算点 ---
-            st.session_state.is_running = False # 停止自动运行
-            acc = st.session_state.practice_correct / total_trials
+            # --- 当前阶段所有试次已完成 ---
+            st.session_state.is_running = False # 停止自动循环
             
-            with placeholder.container():
-                st.subheader(f"练习结算：{st.session_state.practice_correct}/{total_trials}")
-                
-                if acc >= 0.6:
-                    # 【达标路径】
-                    st.success(f"正确率 {acc*100:.0f}%：已达标！")
-                    # 这里增加一个确认按钮，只有点击后才执行 next_stage()
-                    if st.button("进入正式诱发阶段", key="practice_pass_btn", use_container_width=True):
-                        # 只有在这里点击，才会执行下一步
-                        next_stage() 
-                else:
-                    # 【未达标路径】
-                    st.error(f"正确率 {acc*100:.0f}%：未达标（需达到 60%）。")
-                    st.warning("请重新进行练习，熟悉任务流程。")
-                    if st.button("重新开始练习", key="practice_retry_btn", use_container_width=True):
-                        # 重置练习计数，回到 READY 状态
-                        st.session_state.trial_num = 1
-                        st.session_state.practice_correct = 0
-                        st.session_state.cdt_step = "READY"
-                        st.rerun()
-            
-            # --- 正式阶段结算 ---
+            if not is_formal:
+                # ==============================
+                # 【练习阶段结算】
+                # ==============================
+                acc = st.session_state.practice_correct / total_trials
+                with placeholder.container():
+                    st.subheader(f"练习完成：{st.session_state.practice_correct}/{total_trials}")
+                    if acc >= 0.6:
+                        st.success(f"正确率 {acc*100:.0f}%：已达标！")
+                        if st.button("进入诱发阶段", key="practice_next_btn", use_container_width=True):
+                            # 只有达标且点击按钮，才进入下一阶段 (VIDEO_INDUCTION)
+                            next_stage()
+                    else:
+                        st.error(f"正确率 {acc*100:.0f}%：未达标（需达到 60%）。")
+                        st.warning("请重新开始练习，熟悉任务流程。")
+                        if st.button("重新开始练习", key="practice_retry_btn", use_container_width=True):
+                            # 重置所有练习相关的控制变量，重新开始 10 组
+                            st.session_state.trial_num = 1
+                            st.session_state.practice_correct = 0
+                            st.session_state.cdt_step = "READY"
+                            st.rerun()
             else:
-                # 判断 Block 切换 (第一组完进入第二组)
+                # ==============================
+                # 【正式阶段结算】
+                # ==============================
+                # 判断是第一个 Block 还是最后一个 Block
                 if st.session_state.block_idx == 0:
+                    # --- 第 1 组完成，准备切换到第 2 组 ---
+                    # 触发“加强回想”环节 (需在主逻辑中配合显示 60s 倒计时)
                     st.session_state.block_idx = 1
                     st.session_state.trial_num = 1
                     st.session_state.cdt_step = "READY"
-                    st.session_state.in_boost_phase = True  # 触发加强回想 (boost) 阶段
+                    st.session_state.in_boost_phase = True 
                     st.rerun()
                 else:
-                    # 两组全部做完，直接自动跳转至恢复阶段 (RECOVERY)
+                    # --- 所有正式任务 (2 组) 全部完成 ---
+                    # 自动跳转到恢复阶段 (RECOVERY)
                     st.session_state.stage_idx += 1
                     st.rerun()
 
