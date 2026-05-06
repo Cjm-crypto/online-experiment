@@ -144,21 +144,25 @@ st.markdown("""<style>
 # ==========================================
 
 def run_js_sequence(sel_b64_list, mask_b64):
-    # 图片大小略微缩小，确保并排稳定性
-    img_html = "".join([f'<img src="data:image/png;base64,{b64}" style="width:250px; height:180px; margin:10px; border:3px solid white; object-fit:cover;">' for b64 in sel_b64_list])
+    # 调整单张图片尺寸为 300px 宽，保留表情细节
+    # 增加 margin 让图片之间有足够的黑色空间
+    img_html = "".join([
+        f'<img src="data:image/png;base64,{b64}" style="width:300px; height:220px; margin:20px; border:1px solid #333; object-fit:contain; background:black;">' 
+        for b64 in sel_b64_list
+    ])
     
     js_component = f"""
-    <div id="box" style="background:black; width:700px; height:500px; display:flex; justify-content:center; align-items:center; border-radius:10px; position:relative; overflow:hidden; margin:auto;">
-        <!-- 1. 注视点 -->
-        <div id="fix" style="color:red; font-size:120px; display:none; position:absolute; z-index:10;">+</div>
+    <div id="box" style="background:black; width:800px; height:600px; display:flex; justify-content:center; align-items:center; position:relative; overflow:hidden; margin:auto; border-radius:5px;">
+        <!-- 1. 注视点：置于最中心 -->
+        <div id="fix" style="color:red; font-size:120px; display:none; position:absolute; z-index:10; font-family:Arial;">+</div>
         
-        <!-- 2. 四张记忆图 -->
-        <div id="grid" style="display:none; width:600px; flex-wrap:wrap; justify-content:center; position:absolute; z-index:10;">
+        <!-- 2. 四张记忆图：采用 Flex 布局实现 2x2 排布 -->
+        <div id="grid" style="display:none; width:750px; flex-wrap:wrap; justify-content:center; align-content:center; position:absolute; z-index:10;">
             {img_html}
         </div>
         
-        <!-- 3. 掩码图 (核心修改：全屏铺满) -->
-        <img id="mask" src="data:image/png;base64,{mask_b64}" style="display:none; width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; z-index:5;">
+        <!-- 3. 掩码图：强制覆盖整个 800x600 区域 -->
+        <img id="mask" src="data:image/png;base64,{mask_b64}" style="display:none; width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; z-index:20;">
     </div>
 
     <script>
@@ -168,21 +172,30 @@ def run_js_sequence(sel_b64_list, mask_b64):
             const g = document.getElementById('grid');
             const m = document.getElementById('mask');
             
-            // 1. 注视点 1s
-            f.style.display = 'block'; await wait(1000); f.style.display = 'none';
+            // 1. 注视点 1.0s
+            f.style.display = 'block'; 
+            await wait(1000); 
+            f.style.display = 'none';
             
-            // 2. 记忆项 1s
-            g.style.display = 'flex'; await wait(1000); g.style.display = 'none';
+            // 2. 记忆项 1.0s (确保图片加载显示)
+            g.style.display = 'flex'; 
+            await wait(1000); 
+            g.style.display = 'none';
             
-            // 3. 掩码 2.2s (此时会完全盖住黑色背景)
-            m.style.display = 'block'; await wait(2200); m.style.display = 'none';
+            // 3. 掩码 2.2s (全屏覆盖)
+            m.style.display = 'block'; 
+            await wait(2200); 
+            m.style.display = 'none';
             
+            // 任务序列结束，通知 Python
             window.parent.postMessage({{type: 'streamlit:setComponentValue', value: 'DONE'}}, '*');
         }}
+        // 确保页面资源（Base64 字符串）解析完毕后执行
         window.onload = run;
     </script>
     """
-    return components.html(js_component, height=520)
+    # 调高组件外部容器高度至 620，防止出现滚动条
+    return components.html(js_component, height=620)
     
 # 4. 局部刷新组件 (CDT 任务核心)
 # ==========================================
