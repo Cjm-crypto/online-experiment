@@ -264,46 +264,45 @@ def cdt_task_fragment(mode="practice"):
             st.rerun()
 
     elif st.session_state.cdt_step == "FEEDBACK":
-        # 1. 显示反馈 (静态 HTML 以防高度抖动闪烁)
+        # 1. 呈现反馈文字 (0.6秒)
         if st.session_state.is_correct:
             st.session_state.practice_correct += 1
-            feedback_html = '<div style="height:60px; line-height:60px; text-align:center; background-color:#d4edda; color:#155724; border-radius:10px; font-weight:bold; font-size:24px; margin-top:20px;">✔ 正 确</div>'
+            placeholder.markdown('<div style="height:60px; line-height:60px; text-align:center; background-color:#d4edda; color:#155724; border-radius:10px; font-weight:bold; font-size:24px;">✔ 正 确</div>', unsafe_allow_html=True)
         else:
-            feedback_html = '<div style="height:60px; line-height:60px; text-align:center; background-color:#f8d7da; color:#721c24; border-radius:10px; font-weight:bold; font-size:24px; margin-top:20px;">✘ 错 误</div>'
-        
-        placeholder.markdown(feedback_html, unsafe_allow_html=True)
+            placeholder.markdown('<div style="height:60px; line-height:60px; text-align:center; background-color:#f8d7da; color:#721c24; border-radius:10px; font-weight:bold; font-size:24px;">✘ 错 误</div>', unsafe_allow_html=True)
         time.sleep(0.6)
         
-        # 2. 判断当前试次是否结束
+        # 2. 检查是否还有剩余试次
         if st.session_state.trial_num < total_trials:
-            # 未结束，自动进入下一组
+            # 自动进入下一题
             st.session_state.trial_num += 1
             st.session_state.cdt_step = "AUTO_SEQ"
             st.rerun()
         else:
-            # 10组/60组全部结束，关闭运行状态
-            st.session_state.is_running = False
+            # --- 10组全部结束，进入结算点 ---
+            st.session_state.is_running = False # 停止自动运行
+            acc = st.session_state.practice_correct / total_trials
             
-            # --- 练习阶段结算 ---
-            if not is_formal:
-                acc = st.session_state.practice_correct / total_trials
+            with placeholder.container():
+                st.subheader(f"练习结算：{st.session_state.practice_correct}/{total_trials}")
+                
                 if acc >= 0.6:
-                    # 达标：重置练习计数，直接自动跳转下一阶段 (VIDEO_INDUCTION)
-                    st.session_state.stage_idx += 1
-                    st.session_state.trial_num = 1
-                    st.session_state.practice_correct = 0
-                    st.session_state.cdt_step = "READY"
-                    st.rerun()
+                    # 【达标路径】
+                    st.success(f"正确率 {acc*100:.0f}%：已达标！")
+                    # 这里增加一个确认按钮，只有点击后才执行 next_stage()
+                    if st.button("进入正式诱发阶段", key="practice_pass_btn", use_container_width=True):
+                        # 只有在这里点击，才会执行下一步
+                        next_stage() 
                 else:
-                    # 未达标：强制停留在当前页面，展示错误信息并提供“重新开始”按钮
-                    with placeholder.container():
-                        st.error(f"练习未达标！当前正确率仅为 {acc*100:.0f}%，未达到 60% 要求。")
-                        if st.button("重新开始练习", use_container_width=True):
-                            # 重置所有练习相关的控制变量
-                            st.session_state.trial_num = 1
-                            st.session_state.practice_correct = 0
-                            st.session_state.cdt_step = "READY"
-                            st.rerun()
+                    # 【未达标路径】
+                    st.error(f"正确率 {acc*100:.0f}%：未达标（需达到 60%）。")
+                    st.warning("请重新进行练习，熟悉任务流程。")
+                    if st.button("重新开始练习", key="practice_retry_btn", use_container_width=True):
+                        # 重置练习计数，回到 READY 状态
+                        st.session_state.trial_num = 1
+                        st.session_state.practice_correct = 0
+                        st.session_state.cdt_step = "READY"
+                        st.rerun()
             
             # --- 正式阶段结算 ---
             else:
@@ -443,7 +442,6 @@ elif current_stage == "WRITING":
     st.markdown("### 正如刚才视频中那种颠倒黑白、令人窒息的不公与气愤。")
     st.markdown("请在下方输入框写下你人生中经历过的，最让你感到**【被严重误解、不公平对待、极度挫败却又无能为力】**的一个事件。")
     st.markdown("【倒计时结束后方可点击，若随便点击则倒计时又会从180秒开始】")
-    txt = st.text_area("书写框：", height=300)
     if 'w_done' not in st.session_state: st.session_state.w_done = False
     # 【修复点】添加了唯一的 key="writing_input"
     txt = st.text_area(
