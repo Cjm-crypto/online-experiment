@@ -143,7 +143,7 @@ st.markdown("""<style>
 # 3. 浏览器端精准计时组件 (JS 核心)
 # ==========================================
 
-ddef run_js_sequence(sel_b64_list, mask_b64):
+def run_js_sequence(sel_b64_list, mask_b64):
     # 图片大小略微缩小，确保并排稳定性
     img_html = "".join([f'<img src="data:image/png;base64,{b64}" style="width:250px; height:180px; margin:10px; border:3px solid white; object-fit:cover;">' for b64 in sel_b64_list])
     
