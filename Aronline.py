@@ -445,8 +445,14 @@ elif current_stage == "WRITING":
     st.markdown("【倒计时结束后方可点击，若随便点击则倒计时又会从180秒开始】")
     txt = st.text_area("书写框：", height=300)
     if 'w_done' not in st.session_state: st.session_state.w_done = False
-    # 这里的 disabled 会在倒计时结束后锁定输入框，内容不可修改删除
-    txt = st.text_area("书写框：", height=300, value=st.session_state.results.get("Writing", ""), disabled=st.session_state.w_done)
+    # 【修复点】添加了唯一的 key="writing_input"
+    txt = st.text_area(
+        "书写框：", 
+        height=300, 
+        value=st.session_state.results.get("Writing", ""), 
+        disabled=st.session_state.w_done,
+        key="writing_input" 
+    )
     if not st.session_state.w_done:
         t_p = st.empty() # 创建唯一的占位符
         for i in range(180, -1, -1):
@@ -458,7 +464,7 @@ elif current_stage == "WRITING":
         st.session_state.w_done = True
         t_p.empty() # 【修正】倒计时结束立即清空，不留 0 秒行
         play_beep()
-        time.sleep(0.5) # 【修正】留出时间让声音播放
+        time.sleep(0.8) # 【修正】留出时间让声音播放
         st.rerun()
     else:
         # 结束后只保留一个进入下一阶段的按钮，不显示任何“时间到”字样
@@ -476,7 +482,13 @@ elif current_stage == "RUMINATION":
     if 'rum_idx' not in st.session_state: st.session_state.rum_idx = 0
     idx = st.session_state.rum_idx
     # 修改点：显示之前的书写内容，且设为不可编辑 (disabled)
-    st.text_area("你刚才记录的事件：", value=st.session_state.results.get("Writing",""), height=200, disabled=True)
+    st.text_area(
+        "你刚才记录的事件（只读参考）：", 
+        value=st.session_state.results.get("Writing",""), 
+        height=200, 
+        disabled=True,
+        key="rumination_view" 
+    )
     st.markdown(f"### 【请闭眼深度思考】")
     st.info(f"**{prompts[idx]}**")
      # 唯一的倒计时显示区
