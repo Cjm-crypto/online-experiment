@@ -6,7 +6,16 @@ import random
 import streamlit as st
 import time
 from streamlit_gsheets import GSheetsConnection
+import numpy as np
 
+def get_noise_img():
+    """生成随机噪音图用于掩码"""
+    return np.random.randint(0, 255, (400, 600), dtype=np.uint8)
+
+def play_beep():
+    """播放提示音"""
+    if os.path.exists("beep.wav"):
+        st.audio("beep.wav", autoplay=True)
 # --- 1. 基础网页样式配置 (浅色护眼模式) ---
 st.set_page_config(page_title="工作记忆实验", layout="centered")
 
@@ -73,7 +82,7 @@ if 'in_boost_phase' not in st.session_state:
 
 # 【核心修复：清理了混入状态变量的 BUG】
 STAGES = [
-    "WELCOME", "INFO", "RRS", "BDI", "STAI", "T1_VAS_COMBINED", "T1_BSRI_INDEPENDENT", 
+    "WELCOME", "INFO", "RRS", "BDI", "STAI", "T1_VAS_BSRI", 
     "PRACTICE_INTRO", "CDT_PRACTICE", "VIDEO_INDUCTION", "WRITING", "RUMINATION", 
     "T2_VAS_BSRI", "FORMAL_INTRO", "CDT_FORMAL", "RECOVERY", "FINISH"
 ]
@@ -98,10 +107,6 @@ def next_stage():
     st.session_state.correct_count = 0
     st.rerun()
 
-def play_beep():
-    if os.path.exists("beep.wav"):
-        st.audio("beep.wav", autoplay=True)
-
 def countdown_timer(seconds, message):
     placeholder = st.empty()
     for i in range(seconds, -1, -1):
@@ -111,7 +116,7 @@ def countdown_timer(seconds, message):
 
 
 # 获取本地图片或生成高还原度文本提示的通用函数
-def get_cdt_stimulus(folder="neutral"):
+delf get_cdt_stimulus(folder="neutral"):
     try:
         all_imgs = [f for f in os.listdir(folder) if f.lower().endswith(('.bmp', '.jpg', '.png'))]
         if len(all_imgs) >= 4:
@@ -121,14 +126,7 @@ def get_cdt_stimulus(folder="neutral"):
             return selected, probe, is_same, folder
     except:
         pass
-    return None, None, random.choice([True, False]), folder
-
-def show_noise_mask(placeholder):
-    if os.path.exists("mask.bmp"):
-        placeholder.image("mask.bmp", use_container_width=True)
-    else:
-        noise = np.random.randint(0, 255, (400, 600), dtype=np.uint8)
-        placeholder.image(noise, use_container_width=True)
+  li return None, None, random.choice([True, False]), folder
     
 # --- 5. 实验流程控制 ---
 
@@ -241,59 +239,53 @@ elif current_stage == "PRACTICE_INTRO":
 elif current_stage == "CDT_PRACTICE":
     TOTAL_PRACTICE = 10
     st.markdown(f"### 练习阶段 ({st.session_state.cdt_trial}/{TOTAL_PRACTICE})")
-    main_placeholder = st.empty()
+    main_p = st.empty()
 
     if st.session_state.trial_status == "READY":
-        if main_placeholder.button(f"点击开始第 {st.session_state.cdt_trial} 组序列"):
+        if main_p.button(f"点击开始第 {st.session_state.cdt_trial} 组测试"):
             st.session_state.trial_status = "SEQUENCE"; st.rerun()
 
     elif st.session_state.trial_status == "SEQUENCE":
-        # 1. 呈现 + 号
-        main_placeholder.markdown("<h1 style='color:red; text-align:center; font-size:100px; padding: 100px 0;'>+</h1>", unsafe_allow_html=True)
-        time.sleep(1.0)
-        
-        # 2. 呈现 4 张图 (从 neutral 文件夹读取)
-        main_placeholder.empty()
-        folder = "neutral"
-        try:
-            all_imgs = [f for f in os.listdir(folder) if f.lower().endswith(('.bmp', '.jpg', '.png'))]
-            sel = random.sample(all_imgs, 4)
-            st.session_state.ans_correct = random.choice([True, False])
-            prb_img = random.choice(sel) if st.session_state.ans_correct else random.choice(list(set(all_imgs)-set(sel)))
-            st.session_state.current_probe = os.path.join(folder, prb_img)
+        with main_p.container():
+            # 1. 注视点
+            st.markdown("<h1 style='color:red; text-align:center; font-size:100px; padding:100px 0;'>+</h1>", unsafe_allow_html=True)
+            time.sleep(1.0)
+            st.empty() # 清空
             
-            with main_placeholder.container():
+            # 2. 图片呈现 (1s)
+            folder = "neutral"
+            try:
+                all_imgs = [f for f in os.listdir(folder) if f.lower().endswith(('.bmp', '.jpg', '.png'))]
+                sel = random.sample(all_imgs, 4)
+                st.session_state.ans_correct = random.choice([True, False])
+                prb = random.choice(sel) if st.session_state.ans_correct else random.choice(list(set(all_imgs)-set(sel)))
+                st.session_state.current_probe = os.path.join(folder, prb)
                 c1, c2 = st.columns(2)
                 c1.image(os.path.join(folder, sel[0]), use_container_width=True)
                 c1.image(os.path.join(folder, sel[1]), use_container_width=True)
                 c2.image(os.path.join(folder, sel[2]), use_container_width=True)
                 c2.image(os.path.join(folder, sel[3]), use_container_width=True)
-            time.sleep(1.0)
-        except Exception as e:
-            st.error(f"图片读取失败: {e}")
-            time.sleep(2); next_stage()
-
-        # 3. 呈现 掩码 (单独一页)
-        main_placeholder.empty()
-        main_placeholder.image(get_noise_img(), use_container_width=True, caption="[ 噪音掩码 ]")
-        time.sleep(2.2)
-        
-        # 4. 跳转判断
-        main_placeholder.empty()
-        st.session_state.trial_status = "WAITING"; st.rerun()
+                time.sleep(1.0)
+            except: st.error("图片读取失败"); time.sleep(1)
+            
+            # 3. 掩码呈现 (2.2s)
+            st.empty()
+            st.image(get_noise_img(), use_container_width=True)
+            time.sleep(2.2)
+            
+            st.session_state.trial_status = "WAITING"; st.rerun()
 
     elif st.session_state.trial_status == "WAITING":
-        st.write("#### 判断：这张脸刚才出现过吗？")
+        st.markdown("#### 判断：刚才那张脸出现过吗？")
         st.image(st.session_state.current_probe, width=300)
         c1, c2 = st.columns(2)
         resp = None
         if c1.button("F (出现过)"): resp = True
         if c2.button("J (没出现)"): resp = False
-        
         if resp is not None:
-            is_correct = (resp == st.session_state.ans_correct)
-            if is_correct: st.session_state.correct_count += 1
-            st.session_state.last_feedback = is_correct
+            correct = (resp == st.session_state.ans_correct)
+            if correct: st.session_state.correct_count += 1
+            st.session_state.last_feedback = correct
             st.session_state.trial_status = "FEEDBACK"; st.rerun()
 
     elif st.session_state.trial_status == "FEEDBACK":
@@ -304,13 +296,12 @@ elif current_stage == "CDT_PRACTICE":
             st.session_state.cdt_trial += 1; st.session_state.trial_status = "READY"; st.rerun()
         else:
             acc = st.session_state.correct_count / TOTAL_PRACTICE
-            st.write(f"练习完成。您的正确率：{acc*100:.0f}%")
+            st.write(f"练习完成。正确率：{acc*100:.0f}%")
             if acc < 0.6:
-                if st.button("未达 60%，重新练习 10 组"): 
+                if st.button("未达 60%，点击重新练习"): 
                     st.session_state.cdt_trial = 1; st.session_state.correct_count = 0; st.session_state.trial_status = "READY"; st.rerun()
             else:
-                st.success("达标！进入下一阶段"); time.sleep(2.0); next_stage()
-
+                st.success("达标！进入下一阶段"); time.sleep(2); next_stage()
 # 10. 诱发视频播放
 elif current_stage == "VIDEO_INDUCTION":
     st.markdown("### 接下来，您将观看一段电影片段。")
