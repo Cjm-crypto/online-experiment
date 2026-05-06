@@ -6,44 +6,41 @@ import random
 import numpy as np
 import io
 import wave
-import base64  # 新增：用于内存预加载图片
+import uuid
+import base64
+import streamlit.components.v1 as components
+from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
-
+from PIL import Image
 # ==========================================
-# 0. 性能优化辅助 (放在脚本顶部)
+# 1. 基础配置与性能优化函数
 # ==========================================
+st.set_page_config(page_title="工作记忆实验", layout="centered")
 
 @st.cache_data
 def get_as_base64(path):
-    """将图片转换为 Base64，实现瞬时呈现"""
+    """将图片转为 Base64 以实现瞬间呈现"""
     with open(path, "rb") as f:
-        data = f.read()
-    return base64.b64encode(data).decode()
+        return base64.b64encode(f.read()).decode()
 
 @st.cache_data
-def preload_all_images(folder):
-    """
-    预加载整个文件夹的所有图片到内存
-    返回字典：{ '路径': 'base64字符串' }
-    """
-    if not os.path.exists(folder):
-        return {}
+def preload_images(folder):
+    """预加载文件夹内所有图片到内存"""
+    if not os.path.exists(folder): return {}
     files = [os.path.join(folder, f) for f in os.listdir(folder) if f.lower().endswith(('.bmp', '.jpg', '.png'))]
-    # 在实验开始时，一次性转换所有图片
     return {f: get_as_base64(f) for f in files}
 
 @st.cache_data
 def get_static_mask_b64():
-    """预生成噪音掩码并转为 Base64"""
-    import PIL.Image
+    """预生成噪音掩码 Base64"""
     arr = np.random.randint(0, 255, (400, 600), dtype=np.uint8)
-    img = PIL.Image.fromarray(arr)
+    img = Image.fromarray(arr)
     buffered = io.BytesIO()
     img.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode()
 
-# --- 声音生成函数 (无需外部文件) ---
 def play_beep():
+    """生成‘叮’声"""
     sample_rate = 44100
     duration = 0.5
     frequency = 1000
@@ -57,17 +54,7 @@ def play_beep():
         wav_file.writeframes(audio_data.tobytes())
     st.audio(byte_io.getvalue(), format="audio/wav", autoplay=True)
 
-def show_noise_mask(placeholder):
-    """显示噪音掩码图"""
-    placeholder.image(get_noise_img(), use_container_width=True)
-
-def get_noise_img():
-    """生成随机噪音图用于掩码"""
-    # 确保已经 import numpy as np
-    return np.random.randint(0, 255, (400, 600), dtype=np.uint8)
-
 # --- 1. 基础网页样式配置 (浅色护眼模式) ---
-st.set_page_config(page_title="工作记忆实验", layout="centered")
 
 st.markdown("""
     <style>
@@ -113,26 +100,22 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- 2. 状态初始化 (在脚本最前端运行) ---
+if 'exp_uuid' not in st.session_state: st.session_state.exp_uuid = str(uuid.uuid4())[:8]
 if 'stage_idx' not in st.session_state: st.session_state.stage_idx = 0
 if 'results' not in st.session_state: st.session_state.results = {}
 if 'cdt_data' not in st.session_state: st.session_state.cdt_data = []
-if 'cdt_trial' not in st.session_state: st.session_state.cdt_trial = 1
-if 'correct_count' not in st.session_state: st.session_state.correct_count = 0
-if 'block_idx' not in st.session_state: st.session_state.block_idx = 0
-if 'in_boost_phase' not in st.session_state: st.session_state.in_boost_phase = False
-# --- 新增练习阶段需要的初始化 ---
+
+# CDT 流程变量
 if 'is_running' not in st.session_state: st.session_state.is_running = False
-if 'cdt_step' not in st.session_state: st.session_state.cdt_step = "FIXATION"
+if 'cdt_step' not in st.session_state: st.session_state.cdt_step = "READY"
 if 'trial_num' not in st.session_state: st.session_state.trial_num = 1
 if 'practice_correct' not in st.session_state: st.session_state.practice_correct = 0
-# --- 新增正式阶段和保存需要的初始化 ---
-if 'trial_status' not in st.session_state: st.session_state.trial_status = "READY"
-if 'exp_id' not in st.session_state: import uuid; st.session_state.exp_id = str(uuid.uuid4())[:8]
+if 'block_idx' not in st.session_state: st.session_state.block_idx = 0
 
 STAGES = [
-    "WELCOME", "INFO", "RRS", "BDI", "STAI", "T1_VAS_COMBINED", "T1_BSRI",
+    "WELCOME", "INFO", "RRS", "BDI", "STAI", "T1_VAS", "T1_BSRI",
     "PRACTICE_INTRO", "CDT_PRACTICE", "VIDEO_INDUCTION", "WRITING", 
-    "RUMINATION", "T2_VAS_COMBINED", "T2_BSRI", "FORMAL_INTRO", 
+    "RUMINATION", "T2_VAS", "T2_BSRI", "FORMAL_INTRO", 
     "CDT_FORMAL", "RECOVERY", "FINISH"
 ]
 
@@ -145,131 +128,144 @@ BSRI_ITEMS = ["1. 此刻，我在反复思考自己的负面情绪。", "2. 此�
 # --- 4. 任务辅助逻辑 ---
 def next_stage():
     st.session_state.stage_idx += 1
-    st.session_state.cdt_trial = 1
-    st.session_state.correct_count = 0
+    st.session_state.trial_num = 1
+    st.session_state.is_running = False
+    st.session_state.cdt_step = "READY"
     st.rerun()
 
-current_stage = STAGES[st.session_state.stage_idx]
+# 样式
+st.markdown("""<style>
+    .main { background-color: #F5F5F5; }
+    div.stButton > button { width: 100%; height: 3.5em; background-color: #007BFF; color: white !important; }
+</style>""", unsafe_allow_html=True)
+
+# ==========================================
+# 3. 浏览器端精准计时组件 (JS 核心)
+# ==========================================
+
+def run_js_sequence(sel_b64_list, mask_b64):
+    img_html = "".join([f'<img src="data:image/png;base64,{b64}" style="width:280px; margin:5px; border:2px solid white;">' for b64 in sel_b64_list])
+    
+    js_component = f"""
+    <div id="box" style="background:black; width:100%; height:500px; display:flex; justify-content:center; align-items:center;">
+        <div id="fix" style="color:red; font-size:120px; display:none;">+</div>
+        <div id="grid" style="display:none; width:600px; flex-wrap:wrap; justify-content:center;">{img_html}</div>
+        <img id="mask" src="data:image/png;base64,{mask_b64}" style="display:none; width:100%; height:100%; object-fit:cover;">
+    </div>
+    <script>
+        const wait = (ms) => new Promise(res => setTimeout(res, ms));
+        async function run() {{
+            const f = document.getElementById('fix');
+            const g = document.getElementById('grid');
+            const m = document.getElementById('mask');
+            
+            f.style.display = 'block'; await wait(1000); f.style.display = 'none';
+            g.style.display = 'flex'; await wait(1000); g.style.display = 'none';
+            m.style.display = 'block'; await wait(2200); m.style.display = 'none';
+            
+            // 结束后告知 Streamlit
+            window.parent.postMessage({{type: 'streamlit:setComponentValue', value: 'DONE'}}, '*');
+        }}
+        window.onload = run;
+    </script>
+    """
+    return components.html(js_component, height=520)
 
 # 4. 局部刷新组件 (CDT 任务核心)
 # ==========================================
 
 @st.fragment
-def run_cdt_logic(mode="practice"):
+def cdt_task_fragment(mode="practice"):
     is_formal = (mode == "formal")
     total_trials = 60 if is_formal else 10
     placeholder = st.empty()
     
-    # 资源获取（使用内存 Base64 字典）
+    # 路径与资源获取
     folder = st.session_state.blocks_order[st.session_state.block_idx][1] if is_formal else "neutral"
-    img_dict = preload_all_images(folder) # 假设你已定义此函数
+    img_dict = preload_images(folder)
     img_paths = list(img_dict.keys())
 
-    # --- 阶段控制 ---
-    if not st.session_state.is_running:
+    if st.session_state.cdt_step == "READY":
         with placeholder.container():
-            st.subheader(f"{'正式' if is_formal else '练习'}阶段 ({st.session_state.trial_num}/{total_trials})")
-            if st.button("开始"):
+            st.subheader(f"{'正式' if is_formal else '练习'} ({st.session_state.trial_num}/{total_trials})")
+            if st.button("开始本组测试"):
                 st.session_state.is_running = True
-                st.session_state.cdt_step = "FIXATION"
+                st.session_state.cdt_step = "AUTO_SEQ"
                 st.rerun()
-    else:
-        # A. 注视点 (1.0s)
-        if st.session_state.cdt_step == "FIXATION":
-            placeholder.markdown("<h1 style='color:red; text-align:center; font-size:150px; margin-top:100px;'>+</h1>", unsafe_allow_html=True)
-            time.sleep(1.0)
-            st.session_state.cdt_step = "MEMORY"
+
+    elif st.session_state.cdt_step == "AUTO_SEQ":
+        # 准备本题数据
+        sel_paths = random.sample(img_paths, 4)
+        ans_same = random.choice([True, False])
+        st.session_state.temp_ans = ans_same
+        probe_p = random.choice(sel_paths) if ans_same else random.choice(list(set(img_paths)-set(sel_paths)))
+        st.session_state.temp_probe_b64 = img_dict[probe_p]
+        
+        # 运行 JS 序列
+        sel_b64_list = [img_dict[p] for p in sel_paths]
+        run_js_sequence(sel_b64_list, get_static_mask_b64())
+        
+        # 服务器同步等待 (略大于 1+1+2.2)
+        time.sleep(4.4)
+        st.session_state.cdt_step = "JUDGE"
+        st.session_state.start_time = time.time()
+        st.rerun()
+
+    elif st.session_state.cdt_step == "JUDGE":
+        with placeholder.container():
+            st.write("刚才是否出现过？")
+            st.markdown(f'<div style="text-align:center;"><img src="data:image/png;base64,{st.session_state.temp_probe_b64}" width="300"></div>', unsafe_allow_html=True)
+            c1, c2 = st.columns(2)
+            res = None
+            if c1.button("F (出现过)"): res = True
+            if c2.button("J (没出现)"): res = False
+            if res is not None:
+                rt = time.time() - st.session_state.start_time
+                st.session_state.is_correct = (res == st.session_state.temp_ans)
+                st.session_state.last_data = {"Resp":"F" if res else "J", "RT":round(rt,3)}
+                st.session_state.cdt_step = "CONF" if is_formal else "FEEDBACK"
+                st.rerun()
+
+    elif st.session_state.cdt_step == "CONF":
+        conf = st.select_slider("信心评价", options=[1,2,3,4,5], value=3)
+        if st.button("提交"):
+            st.session_state.cdt_data.append({
+                "Block": st.session_state.blocks_order[st.session_state.block_idx][0],
+                "Trial": st.session_state.trial_num, **st.session_state.last_data,
+                "Correct": 1 if st.session_state.is_correct else 0, "Conf": conf, "Is_Same": st.session_state.temp_ans
+            })
+            st.session_state.cdt_step = "FEEDBACK"
             st.rerun()
 
-        # B. 记忆项 (1.0s) - 【核心修改：HTML Flexbox 打包呈现】
-        elif st.session_state.cdt_step == "MEMORY":
-            sel_paths = random.sample(img_paths, 4)
-            ans_same = random.choice([True, False])
-            st.session_state.temp_ans = ans_same
-            probe_p = random.choice(sel_paths) if ans_same else random.choice(list(set(img_paths)-set(sel_paths)))
-            st.session_state.temp_probe_b64 = img_dict[probe_p]
-
-            # 将 4 张图打包成一个 HTML 块，实现真正同时呈现
-            b64_imgs = [img_dict[p] for p in sel_paths]
-            img_html = f"""
-            <div style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center; width: 650px; margin: auto;">
-                <img src="data:image/png;base64,{b64_imgs[0]}" style="width: 300px; margin: 5px; border: 2px solid white;">
-                <img src="data:image/png;base64,{b64_imgs[1]}" style="width: 300px; margin: 5px; border: 2px solid white;">
-                <img src="data:image/png;base64,{b64_imgs[2]}" style="width: 300px; margin: 5px; border: 2px solid white;">
-                <img src="data:image/png;base64,{b64_imgs[3]}" style="width: 300px; margin: 5px; border: 2px solid white;">
-            </div>
-            """
-            placeholder.markdown(img_html, unsafe_allow_html=True)
-            time.sleep(1.0)
-            st.session_state.cdt_step = "MASK"
+    elif st.session_state.cdt_step == "FEEDBACK":
+        if st.session_state.is_correct: 
+            st.session_state.practice_correct += 1
+            placeholder.success("✔ 正确")
+        else: placeholder.error("✘ 错误")
+        time.sleep(0.6)
+        
+        if st.session_state.trial_num < total_trials:
+            st.session_state.trial_num += 1
+            st.session_state.cdt_step = "AUTO_SEQ"
             st.rerun()
-
-        # C. 掩码 (2.2s)
-        elif st.session_state.cdt_step == "MASK":
-            mask_b64 = get_static_mask_b64() # 假设你已定义
-            placeholder.markdown(f'<div style="text-align:center;"><img src="data:image/png;base64,{mask_b64}" style="width:610px;"></div>', unsafe_allow_html=True)
-            time.sleep(2.2)
-            st.session_state.cdt_step = "JUDGE"
-            st.session_state.start_time = time.time()
-            st.rerun()
-
-        # D. 判断
-        elif st.session_state.cdt_step == "JUDGE":
-            with placeholder.container():
-                st.markdown("<p style='text-align:center;'>刚才是否出现过？</p>", unsafe_allow_html=True)
-                st.markdown(f'<div style="text-align:center;"><img src="data:image/png;base64,{st.session_state.temp_probe_b64}" style="width:300px;"></div>', unsafe_allow_html=True)
-                c1, c2 = st.columns(2)
-                res = None
-                if c1.button("F (出现过)"): res = True
-                if c2.button("J (没出现)"): res = False
-                if res is not None:
-                    st.session_state.is_correct = (res == st.session_state.temp_ans)
-                    # 正式实验需要存数据
-                    if is_formal:
-                        st.session_state.last_res = {"Resp": "F" if res else "J", "RT": round(time.time()-st.session_state.start_time, 3)}
-                        st.session_state.cdt_step = "CONFIDENCE"
-                    else:
-                        st.session_state.cdt_step = "FEEDBACK"
+        else:
+            # 结算逻辑
+            if not is_formal:
+                acc = st.session_state.practice_correct / total_trials
+                if acc >= 0.6: 
+                    st.session_state.stage_idx += 1 # 自动进入视频阶段
                     st.rerun()
-
-        # E. 反馈与【关键：自动跳转逻辑】
-        elif st.session_state.cdt_step == "FEEDBACK":
-            if st.session_state.is_correct:
-                st.session_state.correct_count += 1
-                placeholder.success("✔ 正确")
-            else:
-                placeholder.error("✘ 错误")
-            time.sleep(0.6)
-
-            if st.session_state.trial_num < total_trials:
-                st.session_state.trial_num += 1
-                st.session_state.cdt_step = "FIXATION"
-                st.rerun()
-            else:
-                # 任务完成后的跳转处理
-                st.session_state.is_running = False
-                if not is_formal:
-                    acc = st.session_state.correct_count / total_trials
-                    if acc >= 0.6:
-                        # 重点：达标后修改 stage_idx 并强制全页面刷新
-                        st.session_state.stage_idx += 1 
-                        st.rerun() # 这里会根据更新后的 stage_idx 重新渲染主程序
-                    else:
-                        st.error(f"正确率 {acc*100:.0f}% 不达标，需重测。")
-                        if st.button("重新练习"):
-                            st.session_state.trial_num = 1
-                            st.session_state.correct_count = 0
-                            st.rerun()
                 else:
-                    # 正式阶段 Block 切换...
-                    if st.session_state.block_idx == 0:
-                        st.session_state.block_idx = 1
-                        st.session_state.trial_num = 1
-                        st.session_state.cdt_step = "FIXATION"
-                        st.rerun()
-                    else:
-                        st.session_state.stage_idx += 1
-                        st.rerun()
+                    st.error(f"不达标 ({acc*100:.0f}%)"); 
+                    if st.button("重试"): 
+                        st.session_state.trial_num=1; st.session_state.practice_correct=0; st.session_state.cdt_step="READY"; st.rerun()
+            else:
+                if st.session_state.block_idx == 0:
+                    st.session_state.block_idx = 1; st.session_state.trial_num = 1; 
+                    st.session_state.cdt_step = "READY"; st.rerun()
+                else: 
+                    st.session_state.stage_idx += 1; st.rerun()
+
 # --- 5. 实验流程控制 ---
 
 # 1. 欢迎页
@@ -379,7 +375,7 @@ elif current_stage == "PRACTICE_INTRO":
     if st.button("准备好后，点击开始练习"): next_stage()
 
 elif current_stage == "CDT_PRACTICE":
-    run_cdt_logic(mode="practice")
+    cdt_task_fragment(mode="practice")
 
 # 10. 诱发视频播放
 elif current_stage == "VIDEO_INDUCTION":
@@ -472,14 +468,10 @@ elif current_stage == "FORMAL_INTRO":
     准备好后，点击下方按钮开始第一组任务。
     """)
     if st.button("开始正式任务"): 
-        b_list = [("中性", "neutral"), ("负性", "negative")]
-        user_name = st.session_state.results.get('Name', '')
-        if len(user_name) % 2 == 0:
-            b_list.reverse()
-            
-        # 将顺序存入内存并进入下一阶段
-        st.session_state.blocks_order = b_list
-        next_stage()  # 这一行也要缩进，表示点击按钮后才执行跳转
+        order = [("中性", "neutral"), ("负性", "negative")]
+        if len(st.session_state.results.get("Name","")) % 2 == 0: order.reverse()
+        st.session_state.blocks_order = order
+        next_stage()
         
 elif current_stage == "CDT_FORMAL":
     if st.session_state.get('in_boost_phase', False):
@@ -489,7 +481,7 @@ elif current_stage == "CDT_FORMAL":
         play_beep()
         if st.button("开始下一组"): st.session_state.in_boost_phase = False; st.rerun()
     else:
-        run_cdt_logic(mode="formal")
+       cdt_task_fragment(mode="formal")
 
 # 16. 恢复阶段
 elif current_stage == "RECOVERY":
