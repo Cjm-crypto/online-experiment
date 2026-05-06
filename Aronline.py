@@ -114,19 +114,6 @@ def countdown_timer(seconds, message):
         time.sleep(1)
     placeholder.empty()
 
-
-# 获取本地图片或生成高还原度文本提示的通用函数
-def get_cdt_stimulus(folder="neutral"):
-    try:
-        all_imgs = [f for f in os.listdir(folder) if f.lower().endswith(('.bmp', '.jpg', '.png'))]
-        if len(all_imgs) >= 4:
-            selected = random.sample(all_imgs, 4)
-            is_same = random.choice([True, False])
-            probe = random.choice(selected) if is_same else random.choice(list(set(all_imgs) - set(selected)))
-            return selected, probe, is_same, folder
-    except:
-        pass
-  li return None, None, random.choice([True, False]), folder
     
 # --- 5. 实验流程控制 ---
 
