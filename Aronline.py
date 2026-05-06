@@ -328,7 +328,7 @@ elif current_stage == "STAI":
 
 
 # 6.VAS 评估 (T1)
-elif current_stage == "T1_VAS_COMBINED":
+elif current_stage == "T1_VAS":
     st.markdown("## 状态评估 (T1)")
     st.markdown("### 1. 请评估你此刻的【生理与心理唤醒度】")
     st.write("(如：心跳加速、警觉、紧张感)")
@@ -426,7 +426,7 @@ elif current_stage == "RUMINATION":
         next_stage()
 
 # 13--- 后测评估 (修改点4：加入 BSRI) ---
-elif current_stage == "T2_VAS_COMBINED":
+elif current_stage == "T2_VAS":
     st.markdown("## 状态评估 (T2)")
     st.markdown("### 1. 请评估你此刻的【生理与心理唤醒度】")
     st.write("(如：心跳加速、警觉、紧张感)")
