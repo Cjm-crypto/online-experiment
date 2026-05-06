@@ -241,48 +241,54 @@ elif current_stage == "PRACTICE_INTRO":
 elif current_stage == "CDT_PRACTICE":
     TOTAL_PRACTICE = 10
     st.markdown(f"### 练习阶段 ({st.session_state.cdt_trial}/{TOTAL_PRACTICE})")
-    placeholder = st.empty()
+    main_placeholder = st.empty()
 
     if st.session_state.trial_status == "READY":
-        if st.button(f"开始第 {st.session_state.cdt_trial} 组序列"):
+        if main_placeholder.button(f"点击开始第 {st.session_state.cdt_trial} 组序列"):
             st.session_state.trial_status = "SEQUENCE"; st.rerun()
 
     elif st.session_state.trial_status == "SEQUENCE":
-        with placeholder.container():
-            # 1. 注视点
-            st.markdown("<h1 style='color:red; text-align:center; font-size:100px;'>+</h1>", unsafe_allow_html=True)
-            time.sleep(1.0)
-            st.empty()
-            
-            # 2. 呈现图片
-            folder = "neutral"
+        # 1. 呈现 + 号
+        main_placeholder.markdown("<h1 style='color:red; text-align:center; font-size:100px; padding: 100px 0;'>+</h1>", unsafe_allow_html=True)
+        time.sleep(1.0)
+        
+        # 2. 呈现 4 张图 (从 neutral 文件夹读取)
+        main_placeholder.empty()
+        folder = "neutral"
+        try:
             all_imgs = [f for f in os.listdir(folder) if f.lower().endswith(('.bmp', '.jpg', '.png'))]
             sel = random.sample(all_imgs, 4)
             st.session_state.ans_correct = random.choice([True, False])
             prb_img = random.choice(sel) if st.session_state.ans_correct else random.choice(list(set(all_imgs)-set(sel)))
             st.session_state.current_probe = os.path.join(folder, prb_img)
             
-            c1, c2 = st.columns(2)
-            c1.image(os.path.join(folder, sel[0]), use_container_width=True)
-            c1.image(os.path.join(folder, sel[1]), use_container_width=True)
-            c2.image(os.path.join(folder, sel[2]), use_container_width=True)
-            c2.image(os.path.join(folder, sel[3]), use_container_width=True)
+            with main_placeholder.container():
+                c1, c2 = st.columns(2)
+                c1.image(os.path.join(folder, sel[0]), use_container_width=True)
+                c1.image(os.path.join(folder, sel[1]), use_container_width=True)
+                c2.image(os.path.join(folder, sel[2]), use_container_width=True)
+                c2.image(os.path.join(folder, sel[3]), use_container_width=True)
             time.sleep(1.0)
-            st.empty()
-            
-            # 3. 掩码
-            show_noise_mask(st)
-            time.sleep(2.2)
-            
-            st.session_state.trial_status = "WAITING"; st.rerun()
+        except Exception as e:
+            st.error(f"图片读取失败: {e}")
+            time.sleep(2); next_stage()
+
+        # 3. 呈现 掩码 (单独一页)
+        main_placeholder.empty()
+        main_placeholder.image(get_noise_img(), use_container_width=True, caption="[ 噪音掩码 ]")
+        time.sleep(2.2)
+        
+        # 4. 跳转判断
+        main_placeholder.empty()
+        st.session_state.trial_status = "WAITING"; st.rerun()
 
     elif st.session_state.trial_status == "WAITING":
         st.write("#### 判断：这张脸刚才出现过吗？")
         st.image(st.session_state.current_probe, width=300)
-        col1, col2 = st.columns(2)
+        c1, c2 = st.columns(2)
         resp = None
-        if col1.button("F (出现过)"): resp = True
-        if col2.button("J (没出现)"): resp = False
+        if c1.button("F (出现过)"): resp = True
+        if c2.button("J (没出现)"): resp = False
         
         if resp is not None:
             is_correct = (resp == st.session_state.ans_correct)
@@ -300,7 +306,7 @@ elif current_stage == "CDT_PRACTICE":
             acc = st.session_state.correct_count / TOTAL_PRACTICE
             st.write(f"练习完成。您的正确率：{acc*100:.0f}%")
             if acc < 0.6:
-                if st.button("未达 60%，重新开始 10 组练习"): 
+                if st.button("未达 60%，重新练习 10 组"): 
                     st.session_state.cdt_trial = 1; st.session_state.correct_count = 0; st.session_state.trial_status = "READY"; st.rerun()
             else:
                 st.success("达标！进入下一阶段"); time.sleep(2.0); next_stage()
