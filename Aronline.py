@@ -72,13 +72,12 @@ if 'trial_status' not in st.session_state:
 # 确保 STAGES 列表已经定义
 STAGES = ["WELCOME", "INFO", "RRS", "BDI", "STAI", "T1_VAS_BSRI", "PRACTICE_INTRO", "CDT_PRACTICE", "VIDEO_INDUCTION", "WRITING", "RUMINATION", "T2_VAS_BSRI", "FORMAL_INTRO", "CDT_FORMAL", "RECOVERY", "FINISH"]
 
-# 只有在上面初始化完之后，再执行下面这一行 (第 72 行)
 try:
     current_stage = STAGES[st.session_state.stage_idx]
-except AttributeError:
-    # 如果万一还是报错，强制重置一下并刷新
+except:
     st.session_state.stage_idx = 0
     st.rerun()
+
 
 # --- 2. 任务辅助逻辑 ---
 def countdown(seconds, msg):
