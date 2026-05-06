@@ -5,15 +5,28 @@ import os
 import random
 from streamlit_gsheets import GSheetsConnection
 import numpy as np
+import io
+import wave
+
+# --- 声音生成函数 (无需外部文件) ---
+def play_beep():
+    sample_rate = 44100
+    duration = 0.5
+    frequency = 1000
+    t = np.linspace(0, duration, int(sample_rate * duration), False)
+    audio_data = (np.sin(frequency * t * 2 * np.pi) * 32767).astype(np.int16)
+    byte_io = io.BytesIO()
+    with wave.open(byte_io, 'wb') as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(audio_data.tobytes())
+    st.audio(byte_io.getvalue(), format="audio/wav", autoplay=True)
 
 def get_noise_img():
     """生成随机噪音图用于掩码"""
     return np.random.randint(0, 255, (400, 600), dtype=np.uint8)
 
-def play_beep():
-    """播放提示音"""
-    if os.path.exists("beep.wav"):
-        st.audio("beep.wav", autoplay=True)
 # --- 1. 基础网页样式配置 (浅色护眼模式) ---
 st.set_page_config(page_title="工作记忆实验", layout="centered")
 
@@ -202,67 +215,116 @@ elif current_stage == "PRACTICE_INTRO":
 # 9. CDT 练习逻辑 (10组，60%要求)
 elif current_stage == "CDT_PRACTICE":
     TOTAL_PRACTICE = 10
-    trial_idx = st.session_state.cdt_trial
-    st.markdown(f"### 练习阶段 {trial_idx}/{TOTAL_PRACTICE}")
-    
     placeholder = st.empty()
-    
-    # 自动流程逻辑
-    if 'practice_step' not in st.session_state: st.session_state.practice_step = "START"
-    
-    if st.session_state.practice_step == "START":
-        if placeholder.button(f"开始第 {trial_idx} 试次"):
-            st.session_state.practice_step = "RUNNING"
-            st.rerun()
-            
-    elif st.session_state.practice_step == "RUNNING":
+     # 1. 准备开始页面
+    if not st.session_state.is_running:
         with placeholder.container():
-            # 1. 注视点 (1s)
-            st.markdown("<h1 style='color:red; text-align:center; font-size:100px; padding:100px 0;'>+</h1>", unsafe_allow_html=True)
-            time.sleep(1.0)
-            # 2. 记忆项 (1s)
-            st.empty()
-            folder = "neutral"
-            all_imgs = [f for f in os.listdir(folder) if f.lower().endswith(('.bmp', '.jpg', '.png'))]
-            sel = random.sample(all_imgs, 4)
-            st.session_state.ans_correct = random.choice([True, False])
-            prb_img = random.choice(sel) if st.session_state.ans_correct else random.choice(list(set(all_imgs)-set(sel)))
-            st.session_state.current_probe = os.path.join(folder, prb_img)
-            c1, c2 = st.columns(2)
-            c1.image(os.path.join(folder, sel[0]), use_container_width=True)
-            c1.image(os.path.join(folder, sel[1]), use_container_width=True)
-            c2.image(os.path.join(folder, sel[2]), use_container_width=True)
-            c2.image(os.path.join(folder, sel[3]), use_container_width=True)
-            time.sleep(1.0) # 练习阶段设为1s
-            # 3. 掩码 (300ms) + 延迟 (2.2s + 0.6s)
-            st.empty()
-            st.image(get_noise_img(), use_container_width=True)
-            time.sleep(3.1) 
-            st.session_state.practice_step = "JUDGE"
+            st.subheader(f"练习阶段 (目标正确率: 60%)")
+            st.write("点击下方按钮后，程序将自动运行 10 组测试。")
+            if st.button("开始练习测试"):
+                st.session_state.is_running = True
+                st.session_state.cdt_step = "FIXATION"
+                st.rerun()
+
+    # 2. 自动循环逻辑
+    elif st.session_state.is_running:
+        
+        # --- 阶段 A: 注视点 (+) ---
+        if st.session_state.cdt_step == "FIXATION":
+            with placeholder.container():
+                st.markdown(f"<p style='text-align:right;'>组次: {st.session_state.trial_num}/{TOTAL_PRACTICE}</p>", unsafe_allow_html=True)
+                st.markdown("<h1 style='color:red; text-align:center; font-size:120px; padding:100px 0;'>+</h1>", unsafe_allow_html=True)
+                time.sleep(1.0)
+            st.session_state.cdt_step = "MEMORY"
             st.rerun()
 
-    elif st.session_state.practice_step == "JUDGE":
-        st.markdown("#### 判断：刚才那张脸出现过吗？")
-        st.image(st.session_state.current_probe, width=300)
-        c1, c2 = st.columns(2)
-        resp = None
-        if c1.button("F (出现过)"): resp = True
-        if c2.button("J (没出现)"): resp = False
-        if resp is not None:
-            if resp == st.session_state.ans_correct: st.session_state.correct_count += 1
-            if trial_idx < TOTAL_PRACTICE:
-                st.session_state.cdt_trial += 1
-                st.session_state.practice_step = "RUNNING" # 自动进入下一题
+        # --- 阶段 B: 四张图片呈现 ---
+        elif st.session_state.cdt_step == "MEMORY":
+            with placeholder.container():
+                folder = "neutral" 
+                # 这里假设你的图片放在 neutral 文件夹下
+                try:
+                    all_imgs = [f for f in os.listdir(folder) if f.lower().endswith(('.bmp', '.jpg', '.png'))]
+                    sel_imgs = random.sample(all_imgs, 4)
+                    
+                    # 决定这一题是“一样”还是“不一样”
+                    ans_same = random.choice([True, False])
+                    # 存储到 session 用于判断
+                    st.session_state.temp_ans = ans_same
+                    if ans_same:
+                        st.session_state.temp_probe = os.path.join(folder, random.choice(sel_imgs))
+                    else:
+                        st.session_state.temp_probe = os.path.join(folder, random.choice(list(set(all_imgs)-set(sel_imgs))))
+                    
+                    # 宫格呈现 2x2
+                    c1, c2 = st.columns(2)
+                    c1.image(os.path.join(folder, sel_imgs[0]), use_container_width=True)
+                    c1.image(os.path.join(folder, sel_imgs[1]), use_container_width=True)
+                    c2.image(os.path.join(folder, sel_imgs[2]), use_container_width=True)
+                    c2.image(os.path.join(folder, sel_imgs[3]), use_container_width=True)
+                    time.sleep(1.0)
+                except Exception as e:
+                    st.error(f"图片读取错误，请检查 neutral 文件夹: {e}")
+                    st.stop()
+            st.session_state.cdt_step = "MASK"
+            st.rerun()
+
+        # --- 阶段 C: 掩码页面 ---
+        elif st.session_state.cdt_step == "MASK":
+            with placeholder.container():
+                st.image(get_noise_img(), use_container_width=True)
+                time.sleep(2.2)
+            st.session_state.cdt_step = "JUDGE"
+            st.rerun()
+
+        # --- 阶段 D: 判断页面 (需被试操作) ---
+        elif st.session_state.cdt_step == "JUDGE":
+            with placeholder.container():
+                st.markdown("### 判断：刚才那组图片中是否有这一张？")
+                st.image(st.session_state.temp_probe, width=300)
+                col1, col2 = st.columns(2)
+                res = None
+                if col1.button("F (出现过)", key=f"f_{st.session_state.trial_num}"): res = True
+                if col2.button("J (没出现过)", key=f"j_{st.session_state.trial_num}"): res = False
+                
+                if res is not None:
+                    # 计分
+                    if res == st.session_state.temp_ans:
+                        st.session_state.practice_correct += 1
+                        st.session_state.last_fb = "正确"
+                    else:
+                        st.session_state.last_fb = "错误"
+                    st.session_state.cdt_step = "FEEDBACK"
+                    st.rerun()
+
+        # --- 阶段 E: 反馈并自动进入下一组 ---
+        elif st.session_state.cdt_step == "FEEDBACK":
+            with placeholder.container():
+                if st.session_state.last_fb == "正确":
+                    st.success("✔ 正确")
+                else:
+                    st.error("✘ 错误")
+                time.sleep(0.6)
+            
+            # 检查是否做完 10 组
+            if st.session_state.trial_num < TOTAL_PRACTICE:
+                st.session_state.trial_num += 1
+                st.session_state.cdt_step = "FIXATION" # 自动跳回第一步
                 st.rerun()
             else:
-                acc = st.session_state.correct_count / TOTAL_PRACTICE
-                st.write(f"练习完成，正确率：{acc*100:.0f}%")
-                if acc < 0.6:
-                    if st.button("未达标，重新练习"):
-                        st.session_state.cdt_trial = 1; st.session_state.correct_count = 0
-                        st.session_state.practice_step = "START"; st.rerun()
+                # 10 组完成，结算
+                acc = st.session_state.practice_correct / TOTAL_PRACTICE
+                if acc >= 0.6:
+                    st.session_state.is_running = False # 停止自动循环
+                    st.success(f"练习完成！正确率: {acc*100:.0f}%。达标，准备进入正式实验。")
+                    if st.button("进入下一环节"): next_stage()
                 else:
-                    st.success("达标！"); time.sleep(1); next_stage()
+                    st.session_state.is_running = False 
+                    st.error(f"正确率仅为 {acc*100:.0f}%，未达到 60%。请重新练习。")
+                    if st.button("重新开始练习"):
+                        st.session_state.trial_num = 1
+                        st.session_state.practice_correct = 0
+                        st.rerun()
 # 10. 诱发视频播放
 elif current_stage == "VIDEO_INDUCTION":
     st.markdown("### 接下来，您将观看一段电影片段。")
