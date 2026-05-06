@@ -123,7 +123,13 @@ def get_cdt_stimulus(folder="neutral"):
         pass
     return None, None, random.choice([True, False]), folder
 
-
+def show_noise_mask(placeholder):
+    if os.path.exists("mask.bmp"):
+        placeholder.image("mask.bmp", use_container_width=True)
+    else:
+        noise = np.random.randint(0, 255, (400, 600), dtype=np.uint8)
+        placeholder.image(noise, use_container_width=True)
+    
 # --- 5. 实验流程控制 ---
 
 # 1. 欢迎页
@@ -238,98 +244,66 @@ elif current_stage == "CDT_PRACTICE":
     placeholder = st.empty()
 
     if st.session_state.trial_status == "READY":
-        if st.button(f"开始第 {st.session_state.cdt_trial} 组测试"):
+        if st.button(f"开始第 {st.session_state.cdt_trial} 组序列"):
             st.session_state.trial_status = "SEQUENCE"; st.rerun()
 
     elif st.session_state.trial_status == "SEQUENCE":
         with placeholder.container():
             # 1. 注视点
-            st.markdown("<h1 style='color:red; text-align:center; font-size:100px;'>+</h1>", unsafe_allow_html=True); time.sleep(1.0)
-            placeholder.empty()
+            st.markdown("<h1 style='color:red; text-align:center; font-size:100px;'>+</h1>", unsafe_allow_html=True)
+            time.sleep(1.0)
+            st.empty()
             
-            # 2. 呈现 4 张图片 (2x2布局)
+            # 2. 呈现图片
             folder = "neutral"
-            try:
-                all_imgs = [f for f in os.listdir(folder) if f.lower().endswith(('.bmp', '.jpg', '.png'))]
-                selected = random.sample(all_imgs, 4)
-                st.session_state.ans_correct = random.choice([True, False])
-                probe_img = random.choice(selected) if st.session_state.ans_correct else random.choice(list(set(all_imgs)-set(selected)))
-                st.session_state.current_probe = os.path.join(folder, probe_img)
-                
-                col1, col2 = st.columns(2)
-                col1.image(os.path.join(folder, selected[0]), use_container_width=True)
-                col1.image(os.path.join(folder, selected[1]), use_container_width=True)
-                col2.image(os.path.join(folder, selected[2]), use_container_width=True)
-                col2.image(os.path.join(folder, selected[3]), use_container_width=True)
-                time.sleep(1.0)
-            except:
-                st.error("无法读取 neutral 文件夹中的图片，请检查路径。")
-                time.sleep(2.0); st.session_state.trial_status = "READY"; st.rerun()
-
-            # 3. 噪音掩码
-            placeholder.empty()
+            all_imgs = [f for f in os.listdir(folder) if f.lower().endswith(('.bmp', '.jpg', '.png'))]
+            sel = random.sample(all_imgs, 4)
+            st.session_state.ans_correct = random.choice([True, False])
+            prb_img = random.choice(sel) if st.session_state.ans_correct else random.choice(list(set(all_imgs)-set(sel)))
+            st.session_state.current_probe = os.path.join(folder, prb_img)
+            
+            c1, c2 = st.columns(2)
+            c1.image(os.path.join(folder, sel[0]), use_container_width=True)
+            c1.image(os.path.join(folder, sel[1]), use_container_width=True)
+            c2.image(os.path.join(folder, sel[2]), use_container_width=True)
+            c2.image(os.path.join(folder, sel[3]), use_container_width=True)
+            time.sleep(1.0)
+            st.empty()
+            
+            # 3. 掩码
             show_noise_mask(st)
             time.sleep(2.2)
             
             st.session_state.trial_status = "WAITING"; st.rerun()
-    # 状态 C：判断阶段
+
     elif st.session_state.trial_status == "WAITING":
-        with placeholder.container():
-            st.markdown("#### 判断：这张脸刚才出现过吗？")
-            col1, col2 = st.columns(2)
-            resp = None
-            if col1.button("F (出现过)"): resp = True
-            if col2.button("J (没出现)"): resp = False
-            
-            if resp is not None:
-                is_correct = (resp == st.session_state.ans_is_correct)
-                if is_correct:
-                    st.session_state.correct_count += 1
-                
-                # 记录是否正确并进入反馈状态
-                st.session_state.last_trial_result = is_correct
-                st.session_state.trial_status = "FEEDBACK"
-                st.rerun()
+        st.write("#### 判断：这张脸刚才出现过吗？")
+        st.image(st.session_state.current_probe, width=300)
+        col1, col2 = st.columns(2)
+        resp = None
+        if col1.button("F (出现过)"): resp = True
+        if col2.button("J (没出现)"): resp = False
+        
+        if resp is not None:
+            is_correct = (resp == st.session_state.ans_correct)
+            if is_correct: st.session_state.correct_count += 1
+            st.session_state.last_feedback = is_correct
+            st.session_state.trial_status = "FEEDBACK"; st.rerun()
 
-    # 状态 D：正误反馈阶段 (单独一页呈现)
     elif st.session_state.trial_status == "FEEDBACK":
-        placeholder.empty()
-        if st.session_state.last_trial_result:
-            placeholder.markdown("<h1 style='color:green; text-align:center; margin-top:100px;'>正确！</h1>", unsafe_allow_html=True)
+        if st.session_state.last_feedback: st.success("### 正确！")
+        else: st.error("### 错误！")
+        time.sleep(1.0)
+        if st.session_state.cdt_trial < TOTAL_PRACTICE:
+            st.session_state.cdt_trial += 1; st.session_state.trial_status = "READY"; st.rerun()
         else:
-            placeholder.markdown("<h1 style='color:red; text-align:center; margin-top:100px;'>错误！</h1>", unsafe_allow_html=True)
-        
-        time.sleep(1.0) # 反馈显示1秒
-        
-        # 判断是否继续练习
-        if st.session_state.cdt_trial < total_practice:
-            st.session_state.cdt_trial += 1
-            st.session_state.trial_status = "READY"
-            st.rerun()
-        else:
-            # 10组结束，计算正确率
-            accuracy = st.session_state.correct_count / total_practice
-            st.session_state.final_acc = accuracy
-            st.session_state.trial_status = "RESULT_CHECK"
-            st.rerun()
-
-    # 状态 E：正确率检查与跳转
-    elif st.session_state.trial_status == "RESULT_CHECK":
-        acc_pct = st.session_state.final_acc * 100
-        st.write(f"### 练习结束")
-        st.write(f"您的正确率为: **{acc_pct:.0f}%**")
-        
-        if st.session_state.final_acc < 0.6:
-            st.error("正确率未达到 60%，需要重新进行练习。")
-            if st.button("重新开始练习"):
-                st.session_state.cdt_trial = 1
-                st.session_state.correct_count = 0
-                st.session_state.trial_status = "READY"
-                st.rerun()
-        else:
-            st.success("恭喜！正确率达标。即将自动进入诱发阶段...")
-            time.sleep(2.0)
-            next_stage()
+            acc = st.session_state.correct_count / TOTAL_PRACTICE
+            st.write(f"练习完成。您的正确率：{acc*100:.0f}%")
+            if acc < 0.6:
+                if st.button("未达 60%，重新开始 10 组练习"): 
+                    st.session_state.cdt_trial = 1; st.session_state.correct_count = 0; st.session_state.trial_status = "READY"; st.rerun()
+            else:
+                st.success("达标！进入下一阶段"); time.sleep(2.0); next_stage()
 
 # 10. 诱发视频播放
 elif current_stage == "VIDEO_INDUCTION":
@@ -408,48 +382,47 @@ elif current_stage == "FORMAL_INTRO":
  # 核心修改：正式 CDT 逻辑 (记录 RT 和信心)
 elif current_stage == "CDT_FORMAL":
     block_name, folder = st.session_state.blocks_order[st.session_state.block_idx]
-    total = 60
+    TOTAL_FORMAL = 60
     if st.session_state.in_boost_phase:
-        st.markdown("### 第一组完成，请闭眼回想气愤事件 (60s)"); time.sleep(60); play_beep()
-        if st.button("开始第二组"): st.session_state.in_boost_phase = False; st.session_state.cdt_trial = 1; st.rerun()
+        st.markdown("### 加强回想中 (60s)"); t_p = st.empty()
+        for i in range(60, -1, -1): t_p.markdown(f"## ⏳ {i}秒"); time.sleep(1)
+        play_beep()
+        if st.button("开始下一组"): st.session_state.in_boost_phase = False; st.session_state.cdt_trial = 1; st.rerun()
     else:
-        st.markdown(f"### {block_name} 模块 ({st.session_state.cdt_trial}/{total})")
+        st.markdown(f"### {block_name} ({st.session_state.cdt_trial}/60)")
         placeholder = st.empty()
         if st.session_state.trial_status == "READY":
-            if st.button(f"开始本组试次"):
-                with placeholder.container():
-                    st.markdown("<h1 style='color:red;'>+</h1>", unsafe_allow_html=True); time.sleep(1.0)
-                    st.write("【 记忆中... 】"); time.sleep(0.8) # 正式设为 1.8s
-                    st.write("【 掩码 】"); time.sleep(2.2)
-                    st.session_state.ans_correct = random.choice([True, False])
-                    st.session_state.start_time = time.time()
-                    st.session_state.trial_status = "WAITING"; st.rerun()
-        
+            if st.button("开始测试试次"): st.session_state.trial_status = "SEQUENCE"; st.rerun()
+        elif st.session_state.trial_status == "SEQUENCE":
+            with placeholder.container():
+                st.markdown("<h1 style='color:red; text-align:center;'>+</h1>", unsafe_allow_html=True); time.sleep(1.0)
+                all_imgs = [f for f in os.listdir(folder) if f.lower().endswith(('.bmp', '.jpg', '.png'))]
+                sel = random.sample(all_imgs, 4)
+                st.session_state.ans_correct = random.choice([True, False])
+                prb = random.choice(sel) if st.session_state.ans_correct else random.choice(list(set(all_imgs)-set(sel)))
+                st.session_state.current_probe = os.path.join(folder, prb)
+                c1, c2 = st.columns(2)
+                c1.image(os.path.join(folder, sel[0])); c1.image(os.path.join(folder, sel[1]))
+                c2.image(os.path.join(folder, sel[2])); c2.image(os.path.join(folder, sel[3]))
+                time.sleep(1.8); placeholder.empty(); show_noise_mask(placeholder); time.sleep(2.2)
+                st.session_state.start_time = time.time(); st.session_state.trial_status = "WAITING"; st.rerun()
         elif st.session_state.trial_status == "WAITING":
-            st.write("#### 这张脸出现过吗？")
+            st.image(st.session_state.current_probe, width=300)
             c1, c2 = st.columns(2)
-            res = None
-            if c1.button("F (出现过)"): res = "F"
-            if c2.button("J (没出现)"): res = "J"
+            res = "F" if c1.button("F (出现过)") else ("J" if c2.button("J (没出现)") else None)
             if res:
                 st.session_state.rt = time.time() - st.session_state.start_time
-                st.session_state.cur_res = res
-                st.session_state.trial_status = "CONF"; st.rerun()
-                
+                st.session_state.cur_res = res; st.session_state.trial_status = "CONF"; st.rerun()
         elif st.session_state.trial_status == "CONF":
-            conf = st.select_slider("信心评价 (1-5)", options=[1,2,3,4,5], value=3)
+            conf = st.select_slider("信心值 (1-5)", options=[1,2,3,4,5], value=3)
             if st.button("提交结果"):
-                acc = 1 if (st.session_state.cur_res=="F" and st.session_state.ans_correct) or (st.session_state.cur_res=="J" and not st.session_state.ans_correct) else 0
-                st.session_state.cdt_data.append({
-                    "Block": block_name, "Trial": st.session_state.cdt_trial, "Resp": st.session_state.cur_res, 
-                    "Correct": acc, "RT": round(st.session_state.rt, 3), "Conf": conf, "Is_Same": st.session_state.ans_correct
-                })
+                is_correct = 1 if (st.session_state.cur_res=="F" and st.session_state.ans_correct) or (st.session_state.cur_res=="J" and not st.session_state.ans_correct) else 0
+                st.session_state.cdt_data.append({"Block": block_name, "Trial": st.session_state.cdt_trial, "Resp": st.session_state.cur_res, "Correct": is_correct, "RT": round(st.session_state.rt, 3), "Conf": conf, "Is_Same": st.session_state.ans_correct})
                 st.session_state.trial_status = "READY"
-                if st.session_state.cdt_trial < total: st.session_state.cdt_trial += 1
+                if st.session_state.cdt_trial < TOTAL_FORMAL: st.session_state.cdt_trial += 1
                 elif st.session_state.block_idx == 0: st.session_state.block_idx = 1; st.session_state.in_boost_phase = True
                 else: next_stage()
                 st.rerun()
-
 
 # 16. 恢复阶段
 elif current_stage == "RECOVERY":
