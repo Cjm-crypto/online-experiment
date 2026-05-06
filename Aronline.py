@@ -158,61 +158,56 @@ current_stage = STAGES[st.session_state.stage_idx]
 def run_cdt_logic(mode="practice"):
     is_formal = (mode == "formal")
     total_trials = 60 if is_formal else 10
-    
-    # 建立一个固定高度的容器占位符，防止页面跳动
     placeholder = st.empty()
     
-    # 获取图片资源 (这里已经在内存中了)
-    if is_formal:
-        block_name, folder = st.session_state.blocks_order[st.session_state.block_idx]
-    else:
-        folder = "neutral"
-    
-    # 从内存字典获取数据
-    img_dict = preload_all_images(folder)
+    # 资源获取（使用内存 Base64 字典）
+    folder = st.session_state.blocks_order[st.session_state.block_idx][1] if is_formal else "neutral"
+    img_dict = preload_all_images(folder) # 假设你已定义此函数
     img_paths = list(img_dict.keys())
 
+    # --- 阶段控制 ---
     if not st.session_state.is_running:
         with placeholder.container():
-            st.subheader(f"{'正式' if is_formal else '练习'}阶段 - 第 {st.session_state.trial_num}/{total_trials} 组")
-            st.write("图片已预载入内存，点击开始后将实现无缝切换。")
-            if st.button("开始测试"):
+            st.subheader(f"{'正式' if is_formal else '练习'}阶段 ({st.session_state.trial_num}/{total_trials})")
+            if st.button("开始"):
                 st.session_state.is_running = True
                 st.session_state.cdt_step = "FIXATION"
                 st.rerun()
     else:
-        # A. 注视点 (1.0s) - 此阶段浏览器非常稳定
+        # A. 注视点 (1.0s)
         if st.session_state.cdt_step == "FIXATION":
             placeholder.markdown("<h1 style='color:red; text-align:center; font-size:150px; margin-top:100px;'>+</h1>", unsafe_allow_html=True)
             time.sleep(1.0)
             st.session_state.cdt_step = "MEMORY"
             st.rerun()
 
-        # B. 记忆项 (1.0s) - 使用 Base64 瞬时呈现
+        # B. 记忆项 (1.0s) - 【核心修改：HTML Flexbox 打包呈现】
         elif st.session_state.cdt_step == "MEMORY":
             sel_paths = random.sample(img_paths, 4)
             ans_same = random.choice([True, False])
             st.session_state.temp_ans = ans_same
-            
-            # 决定探测图片
             probe_p = random.choice(sel_paths) if ans_same else random.choice(list(set(img_paths)-set(sel_paths)))
-            st.session_state.temp_probe_b64 = img_dict[probe_p] # 存入 Base64
-            
-            with placeholder.container():
-                c1, c2 = st.columns(2)
-                # 直接通过 HTML 渲染 Base64，绕过 Streamlit 的图片下载机制
-                for i, col in enumerate([c1, c1, c2, c2]):
-                    b64_str = img_dict[sel_paths[i]]
-                    col.markdown(f'<img src="data:image/png;base64,{b64_str}" style="width:100%">', unsafe_allow_html=True)
-            
-            time.sleep(1.0) # 此时计时的准确性极高，因为图片已经在 HTML 中了
+            st.session_state.temp_probe_b64 = img_dict[probe_p]
+
+            # 将 4 张图打包成一个 HTML 块，实现真正同时呈现
+            b64_imgs = [img_dict[p] for p in sel_paths]
+            img_html = f"""
+            <div style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center; width: 650px; margin: auto;">
+                <img src="data:image/png;base64,{b64_imgs[0]}" style="width: 300px; margin: 5px; border: 2px solid white;">
+                <img src="data:image/png;base64,{b64_imgs[1]}" style="width: 300px; margin: 5px; border: 2px solid white;">
+                <img src="data:image/png;base64,{b64_imgs[2]}" style="width: 300px; margin: 5px; border: 2px solid white;">
+                <img src="data:image/png;base64,{b64_imgs[3]}" style="width: 300px; margin: 5px; border: 2px solid white;">
+            </div>
+            """
+            placeholder.markdown(img_html, unsafe_allow_html=True)
+            time.sleep(1.0)
             st.session_state.cdt_step = "MASK"
             st.rerun()
 
         # C. 掩码 (2.2s)
         elif st.session_state.cdt_step == "MASK":
-            mask_b64 = get_static_mask_b64()
-            placeholder.markdown(f'<img src="data:image/png;base64,{mask_b64}" style="width:100%">', unsafe_allow_html=True)
+            mask_b64 = get_static_mask_b64() # 假设你已定义
+            placeholder.markdown(f'<div style="text-align:center;"><img src="data:image/png;base64,{mask_b64}" style="width:610px;"></div>', unsafe_allow_html=True)
             time.sleep(2.2)
             st.session_state.cdt_step = "JUDGE"
             st.session_state.start_time = time.time()
@@ -221,23 +216,23 @@ def run_cdt_logic(mode="practice"):
         # D. 判断
         elif st.session_state.cdt_step == "JUDGE":
             with placeholder.container():
-                st.write("判断：刚才是否出现过？")
-                # 探测图片也是内存直出
-                st.markdown(f'<img src="data:image/png;base64,{st.session_state.temp_probe_b64}" style="width:300px">', unsafe_allow_html=True)
-                col1, col2 = st.columns(2)
+                st.markdown("<p style='text-align:center;'>刚才是否出现过？</p>", unsafe_allow_html=True)
+                st.markdown(f'<div style="text-align:center;"><img src="data:image/png;base64,{st.session_state.temp_probe_b64}" style="width:300px;"></div>', unsafe_allow_html=True)
+                c1, c2 = st.columns(2)
                 res = None
-                if col1.button("F (出现过)"): res = True
-                if col2.button("J (没出现)"): res = False
-                
+                if c1.button("F (出现过)"): res = True
+                if c2.button("J (没出现)"): res = False
                 if res is not None:
-                    rt = time.time() - st.session_state.start_time
                     st.session_state.is_correct = (res == st.session_state.temp_ans)
-                    st.session_state.last_rt = rt
-                    st.session_state.last_res_str = "F" if res else "J"
-                    st.session_state.cdt_step = "CONFIDENCE" if is_formal else "FEEDBACK"
+                    # 正式实验需要存数据
+                    if is_formal:
+                        st.session_state.last_res = {"Resp": "F" if res else "J", "RT": round(time.time()-st.session_state.start_time, 3)}
+                        st.session_state.cdt_step = "CONFIDENCE"
+                    else:
+                        st.session_state.cdt_step = "FEEDBACK"
                     st.rerun()
 
-        # E. 反馈 (0.6s)
+        # E. 反馈与【关键：自动跳转逻辑】
         elif st.session_state.cdt_step == "FEEDBACK":
             if st.session_state.is_correct:
                 st.session_state.correct_count += 1
@@ -245,15 +240,36 @@ def run_cdt_logic(mode="practice"):
             else:
                 placeholder.error("✘ 错误")
             time.sleep(0.6)
-            
+
             if st.session_state.trial_num < total_trials:
                 st.session_state.trial_num += 1
                 st.session_state.cdt_step = "FIXATION"
                 st.rerun()
             else:
+                # 任务完成后的跳转处理
                 st.session_state.is_running = False
-                # 检查达标... (逻辑同前)
-                st.rerun()
+                if not is_formal:
+                    acc = st.session_state.correct_count / total_trials
+                    if acc >= 0.6:
+                        # 重点：达标后修改 stage_idx 并强制全页面刷新
+                        st.session_state.stage_idx += 1 
+                        st.rerun() # 这里会根据更新后的 stage_idx 重新渲染主程序
+                    else:
+                        st.error(f"正确率 {acc*100:.0f}% 不达标，需重测。")
+                        if st.button("重新练习"):
+                            st.session_state.trial_num = 1
+                            st.session_state.correct_count = 0
+                            st.rerun()
+                else:
+                    # 正式阶段 Block 切换...
+                    if st.session_state.block_idx == 0:
+                        st.session_state.block_idx = 1
+                        st.session_state.trial_num = 1
+                        st.session_state.cdt_step = "FIXATION"
+                        st.rerun()
+                    else:
+                        st.session_state.stage_idx += 1
+                        st.rerun()
 # --- 5. 实验流程控制 ---
 
 # 1. 欢迎页
