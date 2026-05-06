@@ -237,37 +237,41 @@ elif current_stage == "CDT_PRACTICE":
     st.markdown(f"### 练习阶段 ({st.session_state.cdt_trial}/{TOTAL_PRACTICE})")
     placeholder = st.empty()
 
-    # 状态 A：准备开始
     if st.session_state.trial_status == "READY":
-        with placeholder.container():
-            st.write("请准备好，点击按钮开始本组序列。")
-            if st.button(f"开始第 {st.session_state.cdt_trial} 组测试"):
-                st.session_state.trial_status = "SEQUENCE"
-                st.rerun()
+        if st.button(f"开始第 {st.session_state.cdt_trial} 组测试"):
+            st.session_state.trial_status = "SEQUENCE"; st.rerun()
 
-    # 状态 B：自动化序列呈现 (这是核心修改点)
     elif st.session_state.trial_status == "SEQUENCE":
-        # 1. 呈现红色的 + 号 (1.0秒)
-        placeholder.markdown("<h1 style='color:red; text-align:center; font-size:100px; margin-top:100px;'>+</h1>", unsafe_allow_html=True)
-        time.sleep(1.0)
-        
-        # 2. 呈现 4 张图片 (1.0秒)
-        placeholder.empty() # 清空 + 号
         with placeholder.container():
-            st.markdown("<h2 style='text-align:center;'>[ 4张记忆面孔呈现中... ]</h2>", unsafe_allow_html=True)
-            # 这里可以放 st.image(...)
-            time.sleep(1.0)
-        
-        # 3. 呈现 掩码 (2.2秒)
-        placeholder.empty() # 清空图片
-        placeholder.markdown("<h1 style='text-align:center; margin-top:100px;'>[ 噪音掩码 ]</h1>", unsafe_allow_html=True)
-        time.sleep(2.2)
-        
-        # 自动跳转到判断阶段
-        st.session_state.ans_is_correct = random.choice([True, False]) # 模拟答案逻辑
-        st.session_state.trial_status = "WAITING"
-        st.rerun()
+            # 1. 注视点
+            st.markdown("<h1 style='color:red; text-align:center; font-size:100px;'>+</h1>", unsafe_allow_html=True); time.sleep(1.0)
+            placeholder.empty()
+            
+            # 2. 呈现 4 张图片 (2x2布局)
+            folder = "neutral"
+            try:
+                all_imgs = [f for f in os.listdir(folder) if f.lower().endswith(('.bmp', '.jpg', '.png'))]
+                selected = random.sample(all_imgs, 4)
+                st.session_state.ans_correct = random.choice([True, False])
+                probe_img = random.choice(selected) if st.session_state.ans_correct else random.choice(list(set(all_imgs)-set(selected)))
+                st.session_state.current_probe = os.path.join(folder, probe_img)
+                
+                col1, col2 = st.columns(2)
+                col1.image(os.path.join(folder, selected[0]), use_container_width=True)
+                col1.image(os.path.join(folder, selected[1]), use_container_width=True)
+                col2.image(os.path.join(folder, selected[2]), use_container_width=True)
+                col2.image(os.path.join(folder, selected[3]), use_container_width=True)
+                time.sleep(1.0)
+            except:
+                st.error("无法读取 neutral 文件夹中的图片，请检查路径。")
+                time.sleep(2.0); st.session_state.trial_status = "READY"; st.rerun()
 
+            # 3. 噪音掩码
+            placeholder.empty()
+            show_noise_mask(st)
+            time.sleep(2.2)
+            
+            st.session_state.trial_status = "WAITING"; st.rerun()
     # 状态 C：判断阶段
     elif st.session_state.trial_status == "WAITING":
         with placeholder.container():
