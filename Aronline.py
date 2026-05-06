@@ -451,7 +451,7 @@ elif current_stage == "WRITING":
         height=300, 
         value=st.session_state.results.get("Writing", ""), 
         disabled=st.session_state.w_done,
-        key="writing_input" 
+        key="main_writing_area"  # 必须指定唯一的 key
     )
     if not st.session_state.w_done:
         t_p = st.empty() # 创建唯一的占位符
@@ -468,7 +468,7 @@ elif current_stage == "WRITING":
         st.rerun()
     else:
         # 结束后只保留一个进入下一阶段的按钮，不显示任何“时间到”字样
-        if st.button("进入下一阶段", use_container_width=True):
+        if st.button("进入下一阶段",key="btn_finish_writing"):
             next_stage()
 
 # 12. 引导反刍 (45s x 4)
