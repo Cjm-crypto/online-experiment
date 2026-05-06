@@ -293,7 +293,7 @@ def cdt_task_fragment(mode="practice"):
                     st.subheader(f"练习完成：{st.session_state.practice_correct}/{total_trials}")
                     if acc >= 0.6:
                         st.success(f"正确率 {acc*100:.0f}%：已达标！")
-                        if st.button("进入诱发阶段", key="practice_next_btn", use_container_width=True):
+                        if st.button("进入下一阶段", key="practice_next_btn", use_container_width=True):
                             # 只有达标且点击按钮，才进入下一阶段 (VIDEO_INDUCTION)
                             next_stage()
                     else:
@@ -519,12 +519,12 @@ elif current_stage == "T2_VAS":
     st.markdown("### 1. 请评估你此刻的【生理与心理唤醒度】")
     st.write("(如：心跳加速、警觉、紧张感)")
     st.info("【打分参考】\n\n0 - 30：感到平静、放松、没有波澜\n\n40 - 60：中等程度的激活，感到轻微的紧张或气愤\n\n70 - 100：非常强烈的紧张、气愤或激动")
-    t1_aro = st.select_slider("滑动滑块评估唤醒度", options=list(range(101)), value=50, key="t2_aro_val")
+    t2_aro = st.select_slider("滑动滑块评估唤醒度", options=list(range(101)), value=50, key="t2_aro_val")
     
     st.markdown("---")
     st.markdown("### 2. 请评估你此刻的【情绪效价】")
     st.info("【打分参考】\n\n0 - 30：感到偏向负面、郁郁、痛苦\n\n40 - 60：情绪中立，没有明显的好坏\n\n70 - 100：感到偏向正面、开心、愉悦")
-    t1_val = st.select_slider("滑动滑块评估效价", options=list(range(101)), value=50, key="t2_val_val")
+    t2_val = st.select_slider("滑动滑块评估效价", options=list(range(101)), value=50, key="t2_val_val")
     
     if st.button("确认提交以上评估"):
         st.session_state.results["T2_Arousal"] = t2_aro
