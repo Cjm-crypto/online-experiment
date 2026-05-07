@@ -110,6 +110,26 @@ st.markdown("""
         border-radius: 10px;
         border: 1px solid #DDD;
     }
+    /* 1. 彻底移除 Streamlit 页面内部多余的间距 */
+        .block-container { padding-top: 2rem !important; padding-bottom: 0rem !important; }
+        .stMarkdown, .element-container { margin: 0 !important; padding: 0 !important; }
+        
+        /* 2. 定义统一的黑框样式，确保像素级一致 */
+        .uniform-black-box {
+            background-color: black !important;
+            width: 800px !important;
+            height: 600px !important;
+            border-radius: 15px !important; /* 圆角一致 */
+            display: grid !important;
+            place-items: center !important;
+            margin: 0 auto !important;
+            box-sizing: border-box !important;
+            border: none !important; /* 确保无边框干扰 */
+            overflow: hidden !important;
+        }
+        
+        /* 3. 统一按钮行的间距 */
+        div[data-testid="stColumn"] { padding-top: 20px !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -169,16 +189,17 @@ def run_js_sequence(sel_b64_list, mask_b64):
     
     js_component = f"""
     <style>
-        body {{ margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; background: transparent; overflow: hidden; }}
-        /* 预留 40px 给标题位置，确保黑框不往上跳 */
-        .header-space {{ height: 40px; width: 100%; }} 
-        #container {{
+        body {{ margin: 0; padding: 0; background: transparent; overflow: hidden; display: flex; flex-direction: column; align-items: center; }}
+        /* 高度占位符：必须与原生页面的标题高度（45px）完全一致 */
+        .title-placeholder {{ height: 45px; width: 100%; }}
+        
+        .black-box {{
             background: black;
             width: 800px;
             height: 600px;
+            border-radius: 15px;
             display: grid;
             place-items: center;
-            border-radius: 12px;
             position: relative;
         }}
         #fix {{ color: red; font-size: 120px; font-family: Arial; position: absolute; z-index: 10; display: none; }}
@@ -186,14 +207,14 @@ def run_js_sequence(sel_b64_list, mask_b64):
             display: none;
             grid-template-columns: repeat(2, 300px);
             grid-template-rows: repeat(2, 220px);
-            gap: 40px; /* 间距与 4x4 保持物理一致 */
+            gap: 40px;
             position: absolute;
             z-index: 5;
         }}
-        #mask {{ width: 100%; height: 100%; object-fit: cover; border-radius: 12px; position: absolute; z-index: 20; display: none; }}
+        #mask {{ width: 100%; height: 100%; object-fit: cover; border-radius: 15px; position: absolute; z-index: 20; display: none; }}
     </style>
-    <div class="header-space"></div>
-    <div id="container">
+    <div class="title-placeholder"></div>
+    <div class="black-box">
         <div id="fix">+</div>
         <div id="grid">{img_html}</div>
         <img id="mask" src="data:image/png;base64,{mask_b64}">
@@ -212,8 +233,8 @@ def run_js_sequence(sel_b64_list, mask_b64):
         window.onload = run;
     </script>
     """
-    # 总高度 = 40 (标题空间) + 600 (黑框) = 640
-    return components.html(js_component, height=640)
+    # 总高度 = 45 (标题空间) + 600 (黑框) = 645
+    return components.html(js_component, height=645, scrolling=False)
     
 # 4. 局部刷新组件 (CDT 任务核心)
 # ==========================================
@@ -257,24 +278,15 @@ def cdt_task_fragment(mode="practice"):
 
     elif st.session_state.cdt_step == "JUDGE":
         with placeholder.container():
-            # 固定高度标题 (40px)
-            st.markdown("<div style='height:40px; line-height:40px; text-align:center; font-size:24px; font-weight:bold;'>刚才是否出现过？</div>", unsafe_allow_html=True)
+            st.markdown("<div style='height:45px; line-height:45px; text-align:center; font-size:24px; font-weight:bold; color:black;'>刚才是否出现过？</div>", unsafe_allow_html=True)
             # 黑框容器：尺寸和样式与 JS 完全一致
             st.markdown(f'''
-            <div style="
-                background-color: black; 
-                width: 800px; 
-                height: 600px; 
-                display: grid; 
-                place-items: center; 
-                margin: 0 auto; 
-                border-radius: 12px;
-                overflow: hidden;
-            ">
+            <div class="uniform-black-box">
                 <img src="data:image/png;base64,{st.session_state.temp_probe_b64}" 
                      style="width:300px; height:220px; object-fit:contain; border:1px solid #333;">
             </div>
-        ''', unsafe_allow_html=True)
+        ''', unsafe_allow_html=True
+        )
             st.write("") # 间距
             c1, c2 = st.columns(2)
             res = None
