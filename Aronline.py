@@ -152,7 +152,6 @@ st.markdown("""<style>
 # ==========================================
 
 def run_js_sequence(sel_b64_list, mask_b64):
-    # 构建图片 HTML，去掉外层 margin，由 Grid 统一控制间距
     img_html = "".join([
         f'<img src="data:image/png;base64,{b64}" style="width:300px; height:220px; border:1px solid #333; object-fit:contain; background:black;">' 
         for b64 in sel_b64_list
@@ -160,86 +159,49 @@ def run_js_sequence(sel_b64_list, mask_b64):
     
     js_component = f"""
     <style>
-        /* 清除 iframe 默认边距，确保内容不偏移 */
-        body {{ margin: 0; padding: 0; display: flex; justify-content: center; background-color: transparent; }}
-        
-        /* 黑色大背景框 */
+        body {{ margin: 0; padding: 0; background-color: transparent; overflow: hidden; display: flex; justify-content: center; }}
         #container {{
             background: black;
             width: 800px;
             height: 600px;
             position: relative;
-            overflow: hidden;
-            border-radius: 8px;
             display: grid;
-            place-items: center; /* 核心：让所有子元素默认在正中心叠加 */
+            place-items: center;
+            border-radius: 10px;
+            box-sizing: border-box;
         }}
-
-        /* 1. 注视点层 */
-        #fix {{
-            color: red;
-            font-size: 120px;
-            font-family: Arial;
-            z-index: 10;
-            display: none;
-            position: absolute;
-        }}
-
-        /* 2. 2x2 图片网格层 */
+        #fix {{ color: red; font-size: 120px; font-family: Arial; position: absolute; z-index: 10; display: none; }}
         #grid {{
             display: none;
-            grid-template-columns: repeat(2, 300px); /* 强制两列，每列 300px */
-            grid-template-rows: repeat(2, 220px);    /* 强制两行，每行 220px */
-            gap: 40px; /* 图片之间的水平和垂直间距 */
+            grid-template-columns: repeat(2, 300px);
+            grid-template-rows: repeat(2, 220px);
+            gap: 40px;
+            position: absolute;
             z-index: 5;
-            position: absolute;
         }}
-
-        /* 3. 掩码层 */
-        #mask {{
-            display: none;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            z-index: 20;
-            position: absolute;
-        }}
+        #mask {{ width: 100%; height: 100%; object-fit: cover; position: absolute; z-index: 20; display: none; border-radius: 10px; }}
     </style>
-
     <div id="container">
         <div id="fix">+</div>
         <div id="grid">{img_html}</div>
         <img id="mask" src="data:image/png;base64,{mask_b64}">
     </div>
-    
     <script>
-    const wait = (ms) => new Promise(res => setTimeout(res, ms));
-    async function run() {{
-        const f = document.getElementById('fix');
-        const g = document.getElementById('grid');
-        const m = document.getElementById('mask');
-        
-        // 1. 注视点 1.0s
-        f.style.display = 'block';
-        await wait(1000);
-        f.style.display = 'none';
-        
-        // 2. 记忆项 1.0s
-        g.style.display = 'grid'; // 切换为 grid 显示
-        await wait(1000);
-        g.style.display = 'none';
-        
-        // 3. 掩码 2.2s (无闪烁切换)
-        m.style.display = 'block';
-        await wait(2200);
-        m.style.display = 'none';
-        
-        window.parent.postMessage({{type: 'streamlit:setComponentValue', value: 'DONE'}}, '*');
-    }}
-    window.onload = run;
+        const wait = (ms) => new Promise(res => setTimeout(res, ms));
+        async function run() {{
+            const f = document.getElementById('fix');
+            const g = document.getElementById('grid');
+            const m = document.getElementById('mask');
+            f.style.display = 'block'; await wait(1000); f.style.display = 'none';
+            g.style.display = 'grid'; await wait(1000); g.style.display = 'none';
+            m.style.display = 'block'; await wait(2200); m.style.display = 'none';
+            window.parent.postMessage({{type: 'streamlit:setComponentValue', value: 'DONE'}}, '*');
+        }}
+        window.onload = run;
     </script>
     """
-    return components.html(js_component, height=620)
+    # 这里高度设为 600，配合下面的 margin 消除闪烁
+    return components.html(js_component, height=600)
     
 # 4. 局部刷新组件 (CDT 任务核心)
 # ==========================================
@@ -283,10 +245,27 @@ def cdt_task_fragment(mode="practice"):
 
     elif st.session_state.cdt_step == "JUDGE":
         with placeholder.container():
-            st.markdown("<h3 style='text-align:center;'>刚才是否出现过？</h3>", unsafe_allow_html=True)
+            st.markdown("""
+            <style>
+                .stMarkdown { line-height: 0; }
+                .block-container { padding-top: 2rem; }
+            </style>
+        """, unsafe_allow_html=True)
             # 封装在与 JS 序列相同的黑色容器中，确保视觉一致性
+            st.markdown("<h3 style='text-align:center; height:30px; margin:0;'>刚才是否出现过？</h3>", unsafe_allow_html=True)
+            # 容器参数：宽高、圆角、布局必须与 JS 组件 100% 一致
             st.markdown(f'''
-            <div style="background-color:black; width:800px; height:600px; display:grid; place-items:center; margin:auto; border-radius:8px;">
+            <div style="
+                background-color: black; 
+                width: 800px; 
+                height: 600px; 
+                display: grid; 
+                place-items: center; 
+                margin: 0 auto; 
+                border-radius: 10px;
+                box-sizing: border-box;
+                overflow: hidden;
+            ">
                 <img src="data:image/png;base64,{st.session_state.temp_probe_b64}" 
                      style="width:300px; height:220px; object-fit:contain; border:1px solid #333;">
             </div>
