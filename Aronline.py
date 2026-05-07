@@ -40,7 +40,7 @@ def get_static_mask_b64():
     return base64.b64encode(buffered.getvalue()).decode()
 
 def play_beep():
-    """生成‘叮’声"""
+    """生成‘叮’声并在后台播放（不显示进度条）"""
     sample_rate = 44100
     duration = 0.5
     frequency = 1000
@@ -52,7 +52,11 @@ def play_beep():
         wav_file.setsampwidth(2)
         wav_file.setframerate(sample_rate)
         wav_file.writeframes(audio_data.tobytes())
-    st.audio(byte_io.getvalue(), format="audio/wav", autoplay=True)
+    
+    # 转换为 Base64 并通过隐藏的 markdown 注入
+    audio_b64 = base64.b64encode(byte_io.getvalue()).decode()
+    audio_html = f'<audio autoplay style="display:none;"><source src="data:audio/wav;base64,{audio_b64}" type="audio/wav"></audio>'
+    st.markdown(audio_html, unsafe_allow_html=True)
 
 # --- 1. 基础网页样式配置 (浅色护眼模式) ---
 
@@ -121,8 +125,12 @@ STAGES = [
 
 # --- 3. 实验常量与量表题库 ---
 RRS_ITEMS = ["我究竟做了什么要遭如此报应", "分析新近发生的事情试图找到原因", "想到“我为什么总是有这种反应”", "一个人走开，思考自己为什么会有这种感觉", "记录你自己的想法并做分析", "回想新近的情境，希望情形已经好转", "想到“为什么我有这样问题而别人没有。”", "想到“我为什么不能把事情做得更好一点﹖”", "分析自己的性格试图找到沮丧的原因", "独自去某个地方考虑自己的感受"]
-BDI_ITEMS = ["悲伤程度", "对未来失望感", "失败感", "负罪感", "惩罚感", "自厌感", "自我谴责", "自杀意念", "哭泣次数", "易激惹", "社交退缩", "犹豫不决", "自我形象改变", "工作困难", "睡眠障碍", "易疲劳", "食欲减退", "体重减轻", "躯体关注", "性欲减退"]
-STAI_ITEMS = ["我感到愉快。", "我感到神经过敏和不安。", "我感到自我满足。", "我希望能像别人那样高兴。", "我感到像一个失败者。", "我感到很宁静。", "我是“平静、冷静和镇定自若”的。", "我感到困难成堆，无法克服。", "我过分忧虑一些事，实际这些事无关紧要。", "我是高兴的。"]
+BDI_ITEMS = ["悲伤程度", "对未来失望感", "失败感", "负罪感", "惩罚感", "自厌感", "自我谴责", "自杀意念", "哭泣次数", "易激惹", "社交退缩", "犹豫不决", "自我形象改变", "工作困难", "睡眠障碍", "易疲劳", "食欲减退", "体重减轻", "躯体关注", "性欲减退", "对惩罚的预期"]
+STAI_ITEMS = ["我感到愉快。", "我感到神经过敏和不安。", "我感到自我满足。", "我希望能像别人那样高兴。",
+                "我感到像一个失败者。","我感到很宁静。", "我是“平静、冷静和镇定自若”的。", "我感到困难成堆，无法克服。", 
+                "我过分忧虑一些事，实际这些事无关紧要。","我是高兴的。", "我的思想处于混乱状态。", "我缺乏自信心。", 
+                "我感到安全。", "我容易做出决断。", "我感到不太好。", "我是满足的。", "一些不重要的思想中缠绕着我，并打扰我。", 
+                "我产生的沮丧如此强烈，无法摆脱。", "我是一个镇定的人。", "一想到当前的事情和利益，我就陷入紧张过虑。"]
 BSRI_ITEMS = ["1. 此刻，我在反复思考自己的负面情绪。", "2. 此刻，我想知道我为什么会反复思虑自己的负面情绪。", "3. 此刻，我想知道我为什么总是感受到自己反复思虑负面情绪。", "4. 此刻，我在想:”为什么我有很多的问题而其他人没有?“", "5. 此刻，我正在脑海里反复回想，最近我说过或做过的事情。", "6. 此刻，我在想:“为什么我不能更好地处理事情?“", "7. 此刻，我很难摆脱自己的负面想法。", "8. 此刻，我正在想:“面对负面情绪为什么我除了反复思虑它，不能以更好的方式反应”。"]
 
 # --- 4. 任务辅助逻辑 ---
@@ -144,8 +152,6 @@ st.markdown("""<style>
 # ==========================================
 
 def run_js_sequence(sel_b64_list, mask_b64):
-    # 调整单张图片尺寸为 300px 宽，保留表情细节
-    # 增加 margin 让图片之间有足够的黑色空间
     img_html = "".join([
         f'<img src="data:image/png;base64,{b64}" style="width:300px; height:220px; margin:20px; border:1px solid #333; object-fit:contain; background:black;">' 
         for b64 in sel_b64_list
@@ -153,48 +159,45 @@ def run_js_sequence(sel_b64_list, mask_b64):
     
     js_component = f"""
     <div id="box" style="background:black; width:800px; height:600px; display:flex; justify-content:center; align-items:center; position:relative; overflow:hidden; margin:auto; border-radius:5px;">
-        <!-- 1. 注视点：置于最中心 -->
-        <div id="fix" style="color:red; font-size:120px; display:none; position:absolute; z-index:10; font-family:Arial;">+</div>
+        <!-- 1. 注视点：绝对居中 -->
+        <div id="fix" style="color:red; font-size:120px; display:none; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); z-index:10; font-family:Arial;">+</div>
         
-        <!-- 2. 四张记忆图：采用 Flex 布局实现 2x2 排布 -->
-        <div id="grid" style="display:none; width:750px; flex-wrap:wrap; justify-content:center; align-content:center; position:absolute; z-index:10;">
+        <!-- 2. 四张记忆图：2x2 居中 -->
+        <div id="grid" style="display:none; width:700px; flex-wrap:wrap; justify-content:center; align-content:center; position:absolute; z-index:5;">
             {img_html}
         </div>
         
-        <!-- 3. 掩码图：强制覆盖整个 800x600 区域 -->
+        <!-- 3. 掩码图：强制全覆盖 -->
         <img id="mask" src="data:image/png;base64,{mask_b64}" style="display:none; width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; z-index:20;">
     </div>
-
+    
     <script>
-        const wait = (ms) => new Promise(res => setTimeout(res, ms));
-        async function run() {{
-            const f = document.getElementById('fix');
-            const g = document.getElementById('grid');
-            const m = document.getElementById('mask');
-            
-            // 1. 注视点 1.0s
-            f.style.display = 'block'; 
-            await wait(1000); 
-            f.style.display = 'none';
-            
-            // 2. 记忆项 1.0s (确保图片加载显示)
-            g.style.display = 'flex'; 
-            await wait(1000); 
-            g.style.display = 'none';
-            
-            // 3. 掩码 2.2s (全屏覆盖)
-            m.style.display = 'block'; 
-            await wait(2200); 
-            m.style.display = 'none';
-            
-            // 任务序列结束，通知 Python
-            window.parent.postMessage({{type: 'streamlit:setComponentValue', value: 'DONE'}}, '*');
-        }}
-        // 确保页面资源（Base64 字符串）解析完毕后执行
-        window.onload = run;
+    const wait = (ms) => new Promise(res => setTimeout(res, ms));
+    async function run() {{
+        const f = document.getElementById('fix');
+        const g = document.getElementById('grid');
+        const m = document.getElementById('mask');
+        
+        // 1. 注视点 1.0s
+        f.style.display = 'block';
+        await wait(1000);
+        f.style.display = 'none';
+        
+        // 2. 记忆项 1.0s
+        g.style.display = 'flex';
+        await wait(1000);
+        g.style.display = 'none';
+        
+        // 3. 掩码 2.2s (直接显示，减少重绘导致的闪烁)
+        m.style.display = 'block';
+        await wait(2200);
+        m.style.display = 'none';
+        
+        window.parent.postMessage({{type: 'streamlit:setComponentValue', value: 'DONE'}}, '*');
+    }}
+    window.onload = run;
     </script>
     """
-    # 调高组件外部容器高度至 620，防止出现滚动条
     return components.html(js_component, height=620)
     
 # 4. 局部刷新组件 (CDT 任务核心)
@@ -240,7 +243,13 @@ def cdt_task_fragment(mode="practice"):
     elif st.session_state.cdt_step == "JUDGE":
         with placeholder.container():
             st.write("刚才是否出现过？")
-            st.markdown(f'<div style="text-align:center;"><img src="data:image/png;base64,{st.session_state.temp_probe_b64}" width="300"></div>', unsafe_allow_html=True)
+            # 封装在与 JS 序列相同的黑色容器中，确保视觉一致性
+            st.markdown(f'''
+            <div style="background-color:black; width:800px; height:600px; display:flex; justify-content:center; align-items:center; margin:auto; border-radius:5px;">
+                <img src="data:image/png;base64,{st.session_state.temp_probe_b64}" style="width:300px; height:220px; object-fit:contain;">
+            </div>
+        ''', unsafe_allow_html=True)
+            st.write("") # 间距
             c1, c2 = st.columns(2)
             res = None
             if c1.button("F (出现过)"): res = True
@@ -253,15 +262,40 @@ def cdt_task_fragment(mode="practice"):
                 st.rerun()
 
     elif st.session_state.cdt_step == "CONF":
-        conf = st.select_slider("信心评价", options=[1,2,3,4,5], value=3)
-        if st.button("提交"):
-            st.session_state.cdt_data.append({
-                "Block": st.session_state.blocks_order[st.session_state.block_idx][0],
-                "Trial": st.session_state.trial_num, **st.session_state.last_data,
-                "Correct": 1 if st.session_state.is_correct else 0, "Conf": conf, "Is_Same": st.session_state.temp_ans
+        with placeholder.container():
+            st.markdown("### 信心评价")
+            st.info("1-完全猜测，2-较没信心，3-中等信心，4-较有信心，5-非常确定")
+            #改为radio格式，模拟量表
+            conf = st.radio(
+                "请选择你的信心程度:",
+                options = [1, 2, 3, 4, 5],
+                index = 2,
+                horizontal = True,
+                key = f"conf_radio_{st.session_state.trial_num}"
+            )
+            if st.button("提交信心评估", use_container_width=True):
+                #保存数据逻辑
+                st.session_state.cdt_data.append({
+                    "Block": st.session_state.blocks_order[st.session_state.block_idx][0],
+                    "Trial": st.session_state.trial_num,
+                    **st.session_state.last_data,
+                    "Correct": 1 if st.session_state.is_correct else 0,
+                    "Conf": conf,
+                    "Is_Same": st.session_state.temp_ans
             })
-            st.session_state.cdt_step = "FEEDBACK"
-            st.rerun()
+                # 正式实验直接跳过反馈阶段，进入下一题判定
+                if is_formal:
+                    # 模拟逻辑：更新题号并判定结束
+                    if st.session_state.trial_num < total_trials:
+                        st.session_state.trial_num += 1
+                        st.session_state.cdt_step = "AUTO_SEQ"
+                    else:
+                        st.session_state.is_running = False
+                        # 后续逻辑跳转至结算
+                    st.rerun()
+                else:
+                    st.session_state.cdt_step = "FEEDBACK"
+                    st.rerun()
 
     elif st.session_state.cdt_step == "FEEDBACK":
         # 1. 呈现反馈文字 (使用静态 HTML 容器防止页面高度抖动闪烁)
