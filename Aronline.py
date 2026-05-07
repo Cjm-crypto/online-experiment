@@ -39,6 +39,16 @@ def get_static_mask_b64():
     img.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode()
 
+st.markdown("""
+    <style>
+        /* 抹平 Streamlit 容器内边距 */
+        .block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; }
+        .element-container, .stMarkdown { margin: 0 !important; padding: 0 !important; }
+        /* 按钮容器上边距固定 */
+        div[data-testid="stColumn"] { padding-top: 15px !important; }
+    </style>
+""", unsafe_allow_html=True)
+
 def play_beep():
     """生成‘叮’声并在后台播放（不显示进度条）"""
     sample_rate = 44100
@@ -159,28 +169,30 @@ def run_js_sequence(sel_b64_list, mask_b64):
     
     js_component = f"""
     <style>
-        body {{ margin: 0; padding: 0; background-color: transparent; overflow: hidden; display: flex; justify-content: center; }}
+        body {{ margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; background: transparent; overflow: hidden; }}
+        /* 预留 40px 给标题位置，确保黑框不往上跳 */
+        .header-space {{ height: 40px; width: 100%; }} 
         #container {{
             background: black;
             width: 800px;
             height: 600px;
-            position: relative;
             display: grid;
             place-items: center;
-            border-radius: 10px;
-            box-sizing: border-box;
+            border-radius: 12px;
+            position: relative;
         }}
         #fix {{ color: red; font-size: 120px; font-family: Arial; position: absolute; z-index: 10; display: none; }}
         #grid {{
             display: none;
             grid-template-columns: repeat(2, 300px);
             grid-template-rows: repeat(2, 220px);
-            gap: 40px;
+            gap: 40px; /* 间距与 4x4 保持物理一致 */
             position: absolute;
             z-index: 5;
         }}
-        #mask {{ width: 100%; height: 100%; object-fit: cover; position: absolute; z-index: 20; display: none; border-radius: 10px; }}
+        #mask {{ width: 100%; height: 100%; object-fit: cover; border-radius: 12px; position: absolute; z-index: 20; display: none; }}
     </style>
+    <div class="header-space"></div>
     <div id="container">
         <div id="fix">+</div>
         <div id="grid">{img_html}</div>
@@ -200,8 +212,8 @@ def run_js_sequence(sel_b64_list, mask_b64):
         window.onload = run;
     </script>
     """
-    # 这里高度设为 600，配合下面的 margin 消除闪烁
-    return components.html(js_component, height=600)
+    # 总高度 = 40 (标题空间) + 600 (黑框) = 640
+    return components.html(js_component, height=640)
     
 # 4. 局部刷新组件 (CDT 任务核心)
 # ==========================================
@@ -244,17 +256,12 @@ def cdt_task_fragment(mode="practice"):
         st.rerun()
 
     elif st.session_state.cdt_step == "JUDGE":
-        with placeholder.container():
-            st.markdown("""
-            <style>
-                .stMarkdown { line-height: 0; }
-                .block-container { padding-top: 2rem; }
-            </style>
-        """, unsafe_allow_html=True)
-            # 封装在与 JS 序列相同的黑色容器中，确保视觉一致性
-            st.markdown("<h3 style='text-align:center; height:30px; margin:0;'>刚才是否出现过？</h3>", unsafe_allow_html=True)
-            # 容器参数：宽高、圆角、布局必须与 JS 组件 100% 一致
-            st.markdown(f'''
+    with placeholder.container():
+        # 固定高度标题 (40px)
+        st.markdown("<div style='height:40px; line-height:40px; text-align:center; font-size:24px; font-weight:bold;'>刚才是否出现过？</div>", unsafe_allow_html=True)
+        
+        # 黑框容器：尺寸和样式与 JS 完全一致
+        st.markdown(f'''
             <div style="
                 background-color: black; 
                 width: 800px; 
@@ -262,8 +269,7 @@ def cdt_task_fragment(mode="practice"):
                 display: grid; 
                 place-items: center; 
                 margin: 0 auto; 
-                border-radius: 10px;
-                box-sizing: border-box;
+                border-radius: 12px;
                 overflow: hidden;
             ">
                 <img src="data:image/png;base64,{st.session_state.temp_probe_b64}" 
@@ -284,6 +290,7 @@ def cdt_task_fragment(mode="practice"):
 
     elif st.session_state.cdt_step == "CONF":
         with placeholder.container():
+            st.markdown("<div style='height:40px;'></div>", unsafe_allow_html=True)
             st.markdown("<h3 style='text-align:center;'>信心评价</h3>", unsafe_allow_html=True)
             st.info("请评价您刚才判断的信心：1-完全猜测，2-较没信心，3-中等信心，4-较有信心，5-非常确定")
             #改为radio格式，模拟量表
