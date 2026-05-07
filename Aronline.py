@@ -152,22 +152,24 @@ st.markdown("""<style>
 # ==========================================
 
 def run_js_sequence(sel_b64_list, mask_b64):
+    # 为每张图片设置固定尺寸，去掉大 margin 改用小的间距，确保 2x2 严丝合缝
     img_html = "".join([
-        f'<img src="data:image/png;base64,{b64}" style="width:300px; height:220px; margin:20px; border:1px solid #333; object-fit:contain; background:black;">' 
+        f'<img src="data:image/png;base64,{b64}" style="width:320px; height:220px; margin:10px; border:1px solid #333; object-fit:contain; background:black;">' 
         for b64 in sel_b64_list
     ])
     
     js_component = f"""
-    <div id="box" style="background:black; width:800px; height:600px; display:flex; justify-content:center; align-items:center; position:relative; overflow:hidden; margin:auto; border-radius:5px;">
-        <!-- 1. 注视点：绝对居中 -->
-        <div id="fix" style="color:red; font-size:120px; display:none; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); z-index:10; font-family:Arial;">+</div>
+    <div id="box" style="background:black; width:800px; height:600px; position:relative; margin:auto; border-radius:10px; overflow:hidden; display:flex; justify-content:center; align-items:center;">
         
-        <!-- 2. 四张记忆图：2x2 居中 -->
-        <div id="grid" style="display:none; width:700px; flex-wrap:wrap; justify-content:center; align-content:center; position:absolute; z-index:5;">
+        <!-- 1. 注视点：绝对居中 -->
+        <div id="fix" style="color:red; font-size:120px; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); z-index:10; font-family:Arial; display:none;">+</div>
+        
+        <!-- 2. 四张记忆图网格：绝对居中 -->
+        <div id="grid" style="width:700px; display:none; flex-wrap:wrap; justify-content:center; align-items:center; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); z-index:5;">
             {img_html}
         </div>
         
-        <!-- 3. 掩码图：强制全覆盖 -->
+        <!-- 3. 掩码图：全屏覆盖 -->
         <img id="mask" src="data:image/png;base64,{mask_b64}" style="display:none; width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; z-index:20;">
     </div>
     
@@ -178,23 +180,25 @@ def run_js_sequence(sel_b64_list, mask_b64):
         const g = document.getElementById('grid');
         const m = document.getElementById('mask');
         
-        // 1. 注视点 1.0s
+        // 1. 注视点呈现 1.0s
         f.style.display = 'block';
         await wait(1000);
         f.style.display = 'none';
         
-        // 2. 记忆项 1.0s
+        // 2. 记忆项呈现 1.0s
         g.style.display = 'flex';
         await wait(1000);
         g.style.display = 'none';
         
-        // 3. 掩码 2.2s (直接显示，减少重绘导致的闪烁)
+        // 3. 掩码呈现 2.2s
         m.style.display = 'block';
         await wait(2200);
         m.style.display = 'none';
         
+        // 通知 Python 任务结束
         window.parent.postMessage({{type: 'streamlit:setComponentValue', value: 'DONE'}}, '*');
     }}
+    // 确保资源加载完毕后运行
     window.onload = run;
     </script>
     """
@@ -242,18 +246,18 @@ def cdt_task_fragment(mode="practice"):
 
     elif st.session_state.cdt_step == "JUDGE":
         with placeholder.container():
-            st.write("刚才是否出现过？")
+            st.markdown("<h3 style='text-align:center;'>刚才是否出现过？</h3>", unsafe_allow_html=True)
             # 封装在与 JS 序列相同的黑色容器中，确保视觉一致性
             st.markdown(f'''
-            <div style="background-color:black; width:800px; height:600px; display:flex; justify-content:center; align-items:center; margin:auto; border-radius:5px;">
-                <img src="data:image/png;base64,{st.session_state.temp_probe_b64}" style="width:300px; height:220px; object-fit:contain;">
+            <div style="background-color:black; width:800px; height:600px; display:flex; justify-content:center; align-items:center; margin:auto; border-radius:10px;">
+                <img src="data:image/png;base64,{st.session_state.temp_probe_b64}" style="width:320px; height:220px; object-fit:contain; border:1px solid #333;">
             </div>
         ''', unsafe_allow_html=True)
             st.write("") # 间距
             c1, c2 = st.columns(2)
             res = None
-            if c1.button("F (出现过)"): res = True
-            if c2.button("J (没出现)"): res = False
+            if c1.button("F (出现过)", use_container_width=True): res = True
+            if c2.button("J (没出现)", use_container_width=True): res = False
             if res is not None:
                 rt = time.time() - st.session_state.start_time
                 st.session_state.is_correct = (res == st.session_state.temp_ans)
@@ -263,15 +267,15 @@ def cdt_task_fragment(mode="practice"):
 
     elif st.session_state.cdt_step == "CONF":
         with placeholder.container():
-            st.markdown("### 信心评价")
-            st.info("1-完全猜测，2-较没信心，3-中等信心，4-较有信心，5-非常确定")
+            st.markdown("<h3 style='text-align:center;'>信心评价</h3>", unsafe_allow_html=True)
+            st.info("请评价您刚才判断的信心：1-完全猜测，2-较没信心，3-中等信心，4-较有信心，5-非常确定")
             #改为radio格式，模拟量表
             conf = st.radio(
                 "请选择你的信心程度:",
                 options = [1, 2, 3, 4, 5],
                 index = 2,
                 horizontal = True,
-                key = f"conf_radio_{st.session_state.trial_num}"
+                key = f"conf_opt_{st.session_state.trial_num}"
             )
             if st.button("提交信心评估", use_container_width=True):
                 #保存数据逻辑
