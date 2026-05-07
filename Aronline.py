@@ -233,7 +233,7 @@ def run_js_sequence(sel_b64_list, mask_b64):
             const g = document.getElementById('grid');
             const m = document.getElementById('mask');
             f.style.display = 'block'; await wait(1000); f.style.display = 'none';
-            g.style.display = 'grid'; await wait(1000); g.style.display = 'none';
+            g.style.display = 'grid'; await wait(1200); g.style.display = 'none';
             m.style.display = 'block'; await wait(2200); m.style.display = 'none';
             window.parent.postMessage({{type: 'streamlit:setComponentValue', value: 'DONE'}}, '*');
         }}
@@ -259,7 +259,7 @@ def cdt_task_fragment(mode="practice"):
 
     if st.session_state.cdt_step == "READY":
         with placeholder.container():
-            st.subheader(f"{'正式' if is_formal else '练习'} ({st.session_state.trial_num}/{total_trials})")
+            st.subheader(f"准备好后，点击下方按钮开始{'正式' if is_formal else '练习'}任务")
             if st.button("开始本组测试"):
                 st.session_state.is_running = True
                 st.session_state.cdt_step = "AUTO_SEQ"
