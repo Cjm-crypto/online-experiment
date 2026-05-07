@@ -50,7 +50,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def play_beep():
-    """生成‘叮’声并在后台播放（不显示进度条）"""
+    """生成‘叮’声并在后台播放，增加唯一标识符确保多次播放"""
     sample_rate = 44100
     duration = 0.5
     frequency = 1000
@@ -63,9 +63,16 @@ def play_beep():
         wav_file.setframerate(sample_rate)
         wav_file.writeframes(audio_data.tobytes())
     
-    # 转换为 Base64 并通过隐藏的 markdown 注入
     audio_b64 = base64.b64encode(byte_io.getvalue()).decode()
-    audio_html = f'<audio autoplay style="display:none;"><source src="data:audio/wav;base64,{audio_b64}" type="audio/wav"></audio>'
+    
+    # 【关键修改】：增加一个随机的 id，强制浏览器重新渲染并播放
+    import time
+    nonce = int(time.time() * 1000) 
+    audio_html = f"""
+        <audio autoplay id="beep_{nonce}" style="display:none;">
+            <source src="data:audio/wav;base64,{audio_b64}" type="audio/wav">
+        </audio>
+    """
     st.markdown(audio_html, unsafe_allow_html=True)
 
 # --- 1. 基础网页样式配置 (浅色护眼模式) ---
@@ -566,6 +573,7 @@ elif current_stage == "RUMINATION":
         disabled=True,
         key="rumination_view" 
     )
+    audio_placeholder = st.empty()
     st.markdown(f"### 【请闭眼深度思考】")
     st.info(f"**{prompts[idx]}**")
      # 唯一的倒计时显示区
@@ -576,9 +584,10 @@ elif current_stage == "RUMINATION":
     
     # 【修正】逻辑：清空 -> 响铃 -> 等待 -> 跳转
     t_p.empty() # 彻底清除“0秒”行
-    play_beep()
+    with audio_placeholder:
+        play_beep()
     time.sleep(0.8) # 稍微多等一下，确保声音完整播放
-    
+    audio_placeholder.empty()
     if idx < len(prompts) - 1:
         st.session_state.rum_idx += 1
         st.rerun()
