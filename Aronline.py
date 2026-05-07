@@ -152,25 +152,64 @@ st.markdown("""<style>
 # ==========================================
 
 def run_js_sequence(sel_b64_list, mask_b64):
-    # 为每张图片设置固定尺寸，去掉大 margin 改用小的间距，确保 2x2 严丝合缝
+    # 构建图片 HTML，去掉外层 margin，由 Grid 统一控制间距
     img_html = "".join([
-        f'<img src="data:image/png;base64,{b64}" style="width:320px; height:220px; margin:10px; border:1px solid #333; object-fit:contain; background:black;">' 
+        f'<img src="data:image/png;base64,{b64}" style="width:300px; height:220px; border:1px solid #333; object-fit:contain; background:black;">' 
         for b64 in sel_b64_list
     ])
     
     js_component = f"""
-    <div id="box" style="background:black; width:800px; height:600px; position:relative; margin:auto; border-radius:10px; overflow:hidden; display:flex; justify-content:center; align-items:center;">
+    <style>
+        /* 清除 iframe 默认边距，确保内容不偏移 */
+        body {{ margin: 0; padding: 0; display: flex; justify-content: center; background-color: transparent; }}
         
-        <!-- 1. 注视点：绝对居中 -->
-        <div id="fix" style="color:red; font-size:120px; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); z-index:10; font-family:Arial; display:none;">+</div>
-        
-        <!-- 2. 四张记忆图网格：绝对居中 -->
-        <div id="grid" style="width:700px; display:none; flex-wrap:wrap; justify-content:center; align-items:center; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); z-index:5;">
-            {img_html}
-        </div>
-        
-        <!-- 3. 掩码图：全屏覆盖 -->
-        <img id="mask" src="data:image/png;base64,{mask_b64}" style="display:none; width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; z-index:20;">
+        /* 黑色大背景框 */
+        #container {{
+            background: black;
+            width: 800px;
+            height: 600px;
+            position: relative;
+            overflow: hidden;
+            border-radius: 8px;
+            display: grid;
+            place-items: center; /* 核心：让所有子元素默认在正中心叠加 */
+        }}
+
+        /* 1. 注视点层 */
+        #fix {{
+            color: red;
+            font-size: 120px;
+            font-family: Arial;
+            z-index: 10;
+            display: none;
+            position: absolute;
+        }}
+
+        /* 2. 2x2 图片网格层 */
+        #grid {{
+            display: none;
+            grid-template-columns: repeat(2, 300px); /* 强制两列，每列 300px */
+            grid-template-rows: repeat(2, 220px);    /* 强制两行，每行 220px */
+            gap: 40px; /* 图片之间的水平和垂直间距 */
+            z-index: 5;
+            position: absolute;
+        }}
+
+        /* 3. 掩码层 */
+        #mask {{
+            display: none;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 20;
+            position: absolute;
+        }}
+    </style>
+
+    <div id="container">
+        <div id="fix">+</div>
+        <div id="grid">{img_html}</div>
+        <img id="mask" src="data:image/png;base64,{mask_b64}">
     </div>
     
     <script>
@@ -180,25 +219,23 @@ def run_js_sequence(sel_b64_list, mask_b64):
         const g = document.getElementById('grid');
         const m = document.getElementById('mask');
         
-        // 1. 注视点呈现 1.0s
+        // 1. 注视点 1.0s
         f.style.display = 'block';
         await wait(1000);
         f.style.display = 'none';
         
-        // 2. 记忆项呈现 1.0s
-        g.style.display = 'flex';
+        // 2. 记忆项 1.0s
+        g.style.display = 'grid'; // 切换为 grid 显示
         await wait(1000);
         g.style.display = 'none';
         
-        // 3. 掩码呈现 2.2s
+        // 3. 掩码 2.2s (无闪烁切换)
         m.style.display = 'block';
         await wait(2200);
         m.style.display = 'none';
         
-        // 通知 Python 任务结束
         window.parent.postMessage({{type: 'streamlit:setComponentValue', value: 'DONE'}}, '*');
     }}
-    // 确保资源加载完毕后运行
     window.onload = run;
     </script>
     """
@@ -249,8 +286,9 @@ def cdt_task_fragment(mode="practice"):
             st.markdown("<h3 style='text-align:center;'>刚才是否出现过？</h3>", unsafe_allow_html=True)
             # 封装在与 JS 序列相同的黑色容器中，确保视觉一致性
             st.markdown(f'''
-            <div style="background-color:black; width:800px; height:600px; display:flex; justify-content:center; align-items:center; margin:auto; border-radius:10px;">
-                <img src="data:image/png;base64,{st.session_state.temp_probe_b64}" style="width:320px; height:220px; object-fit:contain; border:1px solid #333;">
+            <div style="background-color:black; width:800px; height:600px; display:grid; place-items:center; margin:auto; border-radius:8px;">
+                <img src="data:image/png;base64,{st.session_state.temp_probe_b64}" 
+                     style="width:300px; height:220px; object-fit:contain; border:1px solid #333;">
             </div>
         ''', unsafe_allow_html=True)
             st.write("") # 间距
