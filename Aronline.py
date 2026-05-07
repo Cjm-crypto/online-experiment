@@ -256,12 +256,11 @@ def cdt_task_fragment(mode="practice"):
         st.rerun()
 
     elif st.session_state.cdt_step == "JUDGE":
-    with placeholder.container():
-        # 固定高度标题 (40px)
-        st.markdown("<div style='height:40px; line-height:40px; text-align:center; font-size:24px; font-weight:bold;'>刚才是否出现过？</div>", unsafe_allow_html=True)
-        
-        # 黑框容器：尺寸和样式与 JS 完全一致
-        st.markdown(f'''
+        with placeholder.container():
+            # 固定高度标题 (40px)
+            st.markdown("<div style='height:40px; line-height:40px; text-align:center; font-size:24px; font-weight:bold;'>刚才是否出现过？</div>", unsafe_allow_html=True)
+            # 黑框容器：尺寸和样式与 JS 完全一致
+            st.markdown(f'''
             <div style="
                 background-color: black; 
                 width: 800px; 
