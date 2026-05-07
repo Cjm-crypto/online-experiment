@@ -8,6 +8,7 @@ import io
 import wave
 import uuid
 import base64
+import streamlit as st
 import streamlit.components.v1 as components
 from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
@@ -16,6 +17,24 @@ from PIL import Image
 # 1. 基础配置与性能优化函数
 # ==========================================
 st.set_page_config(page_title="工作记忆实验", layout="centered")
+
+# 定义 CSS：电脑端显示 .pc-only，手机端显示 .mobile-only
+st.markdown("""
+    <style>
+    /* 默认隐藏手机端内容 */
+    .mobile-only { display: none; }
+    
+    /* 当屏幕宽度小于 768px 时（手机） */
+    @media (max-width: 768px) {
+        .pc-only { display: none; }
+        .mobile-only { display: block; }
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# 在页面中放置不同内容
+st.markdown('<div class="pc-only"><h1>这是电脑端专属界面</h1><p>你会看到更复杂的图表...</p></div>', unsafe_allow_html=True)
+st.markdown('<div class="mobile-only"><h1>这是手机端简洁版</h1><p>为了方便操作，我们精简了内容...</p></div>', unsafe_allow_html=True)
 
 @st.cache_data
 def get_as_base64(path):
